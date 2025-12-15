@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Energy App</string>
+    
+    <!-- Login Screen -->
+    <string name="login_title">Energy Station</string>
+    <string name="login_subtitle">Sales Management System</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="invalid_credentials">Invalid username or password</string>
+    
+    <!-- Dashboard -->
+    <string name="welcome">Welcome, %s</string>
+    <string name="admin_dashboard">Admin Dashboard</string>
+    <string name="attendant_dashboard">Attendant Dashboard</string>
+    
+    <!-- Admin Menu -->
+    <string name="user_management">User Management</string>
+    <string name="shift_management">Shift Management</string>
+    <string name="reports">Reports</string>
+    <string name="settings">Settings</string>
+    <string name="logout">Logout</string>
+    
+    <!-- Attendant Menu -->
+    <string name="record_sale">Record Sale</string>
+    <string name="my_sales">My Sales</string>
+    <string name="current_shift">Current Shift</string>
+    
+    <!-- Shift Management -->
+    <string name="open_shift">Open Shift</string>
+    <string name="close_shift">Close Shift</string>
+    <string name="select_pump">Select Pump</string>
+    <string name="select_shift_type">Select Shift Type</string>
+    <string name="opening_meter_reading">Opening Meter Reading</string>
+    <string name="closing_meter_reading">Closing Meter Reading</string>
+    <string name="shift_opened">Shift opened successfully</string>
+    <string name="shift_closed">Shift closed successfully</string>
+    <string name="shift_already_open">Shift is already open for this pump</string>
+    
+    <!-- Sales -->
+    <string name="sale_amount">Sale Amount (KES)</string>
+    <string name="customer_mobile">Customer Mobile Number</string>
+    <string name="sale_id">Sale ID</string>
+    <string name="initiate_mpesa">Initiate M-Pesa Payment</string>
+    <string name="processing_payment">Processing payment…</string>
+    <string name="payment_successful">Payment successful!</string>
+    <string name="payment_failed">Payment failed: %s</string>
+    <string name="mpesa_receipt">M-Pesa Receipt: %s</string>
+    
+    <!-- Reports -->
+    <string name="filter_by_pump">Filter by Pump</string>
+    <string name="filter_by_attendant">Filter by Attendant</string>
+    <string name="filter_by_shift">Filter by Shift</string>
+    <string name="search_mobile">Search by Mobile</string>
+    <string name="apply_filters">Apply Filters</string>
+    <string name="clear_filters">Clear Filters</string>
+    <string name="total_sales">Total Sales: KES %s</string>
+    <string name="no_sales_found">No sales records found</string>
+    
+    <!-- User Management -->
+    <string name="add_user">Add User</string>
+    <string name="edit_user">Edit User</string>
+    <string name="delete_user">Delete User</string>
+    <string name="full_name">Full Name</string>
+    <string name="mobile_number">Mobile Number</string>
+    <string name="role">Role</string>
+    <string name="active">Active</string>
+    <string name="inactive">Inactive</string>
+    <string name="user_created">User created successfully</string>
+    <string name="user_updated">User updated successfully</string>
+    <string name="user_deleted">User deleted successfully</string>
+    
+    <!-- Common -->
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
+    <string name="confirm">Confirm</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="ok">OK</string>
+    <string name="error">Error</string>
+    <string name="success">Success</string>
+    <string name="loading">Loading…</string>
+    
+    <!-- Validation -->
+    <string name="field_required">This field is required</string>
+    <string name="invalid_mobile">Invalid mobile number format</string>
+    <string name="invalid_amount">Invalid amount</string>
+    <string name="amount_must_be_positive">Amount must be greater than zero</string>
+    
+    <!-- M-Pesa Simulation -->
+    <string name="mpesa_success">Transaction successful</string>
+    <string name="mpesa_insufficient_funds">Insufficient funds in M-Pesa account</string>
+    <string name="mpesa_cancelled">Transaction cancelled by customer</string>
+    <string name="mpesa_error">An error occurred during transaction</string>
+</resources>
