@@ -52,6 +52,7 @@ fun AdminDashboardScreen(
     onNavigateToUserLoginManagement: () -> Unit = {},
     onNavigateToLicenseManagement: () -> Unit = {},  // Super Admin only - Generate
     onNavigateToLicenseList: () -> Unit = {},  // Super Admin only - View All
+    onNavigateToMultiStationDashboard: () -> Unit = {},  // Super Admin only - Multi-Station
     isSuperAdmin: Boolean = false,  // Controls visibility of License Management
     onLogout: () -> Unit
 ) {
@@ -210,6 +211,7 @@ fun AdminDashboardScreen(
                             onUserLoginManagement = onNavigateToUserLoginManagement,
                             onLicenseManagement = onNavigateToLicenseManagement,
                             onLicenseList = onNavigateToLicenseList,
+                            onMultiStationDashboard = onNavigateToMultiStationDashboard,
                             isSuperAdmin = isSuperAdmin
                         )
                     }
@@ -797,6 +799,7 @@ fun ModernQuickActionsGrid(
     onUserLoginManagement: () -> Unit = {},
     onLicenseManagement: () -> Unit = {},  // Super Admin only - Generate
     onLicenseList: () -> Unit = {},  // Super Admin only - View All
+    onMultiStationDashboard: () -> Unit = {},  // Super Admin only - Multi-Station
     isSuperAdmin: Boolean = false  // Controls visibility of License Management
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -908,6 +911,86 @@ fun ModernQuickActionsGrid(
             } else {
                 Spacer(modifier = Modifier.weight(1f))
                 Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        // Row 4 - SUPER ADMIN ONLY - Multi-Station Dashboard
+        if (isSuperAdmin) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Multi-Station Dashboard - Prominent Button
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            spotColor = Color(0xFF00D4FF).copy(alpha = 0.3f)
+                        )
+                        .clickable { onMultiStationDashboard() },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    listOf(
+                                        Color(0xFF667EEA),
+                                        Color(0xFF764BA2),
+                                        Color(0xFFFF6B9D)
+                                    )
+                                )
+                            )
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .background(
+                                        color = Color.White.copy(alpha = 0.2f),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Business,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🏢 Multi-Station Dashboard",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "View all 50+ stations • Aggregated sales • Real-time status",
+                                    fontSize = 12.sp,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                            }
+                            Icon(
+                                Icons.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

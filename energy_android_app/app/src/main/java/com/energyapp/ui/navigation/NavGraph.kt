@@ -109,6 +109,9 @@ fun NavGraph(
                 onNavigateToLicenseList = {
                     navController.navigate(Screen.LicenseList.route)
                 },
+                onNavigateToMultiStationDashboard = {
+                    navController.navigate(Screen.MultiStationDashboard.route)
+                },
                 isSuperAdmin = isSuperAdmin,
                 onLogout = {
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
@@ -264,6 +267,27 @@ fun NavGraph(
             com.energyapp.ui.screens.license.LicenseListScreen(
                 licenseManager = viewModel.licenseManager,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Super Admin only - Multi-Station Dashboard (View All Stations)
+        composable(Screen.MultiStationDashboard.route) {
+            MultiStationDashboardScreen(
+                onNavigateToStation = { stationId ->
+                    // Navigate to specific station details (can be implemented later)
+                    // For now, just go back
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
+                },
+                onLogout = {
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        preferencesManager.clearUserSession()
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                }
             )
         }
     }

@@ -6,6 +6,7 @@ sealed class Screen(val route: String) {
     object LicenseList : Screen("license_list")  // View All Licenses - Super Admin
     object Login : Screen("login")
     object AdminDashboard : Screen("admin_dashboard")
+    object MultiStationDashboard : Screen("multi_station_dashboard")  // Multi-Station Overview - Super Admin
     object AttendantDashboard : Screen("attendant_dashboard")
     object UserManagement : Screen("user_management")
     object ShiftManagement : Screen("shift_management")
