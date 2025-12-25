@@ -359,6 +359,13 @@ UPDATE public.fuel_prices SET station_id = 1 WHERE station_id IS NULL;
 
 -- 12. HELPER FUNCTIONS
 
+-- Drop existing functions first to avoid return type mismatch errors
+DROP FUNCTION IF EXISTS public.get_user_accessible_stations(UUID);
+DROP FUNCTION IF EXISTS public.get_attendant_accessible_stations(INTEGER);
+DROP FUNCTION IF EXISTS public.get_station_shift_summary(INTEGER, DATE);
+DROP FUNCTION IF EXISTS public.get_multi_station_sales_summary(INTEGER[], DATE, DATE);
+DROP FUNCTION IF EXISTS public.get_all_stations_today_summary();
+
 -- Function to get all stations accessible by a user (from users table - UUID)
 CREATE OR REPLACE FUNCTION public.get_user_accessible_stations(p_user_id UUID)
 RETURNS TABLE (
