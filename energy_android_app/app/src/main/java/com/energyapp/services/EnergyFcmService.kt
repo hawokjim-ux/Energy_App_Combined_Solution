@@ -253,15 +253,17 @@ class EnergyFcmService : FirebaseMessagingService() {
         
         createNotificationChannel(notificationManager)
         
-        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             data.forEach { (key, value) -> putExtra(key, value) }
+        } ?: Intent().apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
         
         val pendingIntent = PendingIntent.getActivity(
             this,
             System.currentTimeMillis().toInt(),
-            intent,
+            launchIntent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
         
