@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -26,7 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.energyapp.ui.components.ErrorDialog
 import com.energyapp.ui.components.LoadingDialog
+import com.energyapp.ui.theme.*
 
+/**
+ * Login Screen - Super Modern 2024 Design
+ * Light theme with vibrant gradients for outdoor visibility
+ */
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
@@ -37,98 +43,137 @@ fun LoginScreen(
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess && uiState.user != null) {
-            // Handle null roleName properly
             val roleName = uiState.user?.roleName ?: "Unknown"
             onLoginSuccess(roleName)
         }
     }
 
+    // Beautiful Light Background with subtle gradient
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF0A0E27),
-                        Color(0xFF1A1F3A),
-                        Color(0xFF0F1419)
+                        LightBackground,
+                        Color(0xFFEEF2FF), // Light purple tint
+                        LightBackground
                     )
                 )
             )
     ) {
+        // Decorative gradient circles
+        Box(
+            modifier = Modifier
+                .size(300.dp)
+                .offset(x = (-100).dp, y = (-50).dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            GradientPurple.copy(alpha = 0.15f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(250.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 80.dp, y = 100.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            GradientCyan.copy(alpha = 0.12f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = 50.dp, y = 50.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            GradientPink.copy(alpha = 0.1f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp),
+                .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
                     .shadow(
                         elevation = 24.dp,
-                        shape = RoundedCornerShape(24.dp),
-                        ambientColor = Color(0xFF4A90E2).copy(alpha = 0.3f)
+                        shape = RoundedCornerShape(28.dp),
+                        spotColor = GradientPurple.copy(alpha = 0.15f)
                     )
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF1E2742),
-                                Color(0xFF2A3551),
-                                Color(0xFF1E2742)
-                            )
-                        )
-                    )
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(CardBackground)
                     .border(
                         width = 1.dp,
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF4A90E2).copy(alpha = 0.3f),
-                                Color(0xFF63B3ED).copy(alpha = 0.2f)
+                                GradientPurple.copy(alpha = 0.2f),
+                                GradientCyan.copy(alpha = 0.2f),
+                                GradientPink.copy(alpha = 0.2f)
                             )
                         ),
-                        shape = RoundedCornerShape(24.dp)
+                        shape = RoundedCornerShape(28.dp)
                     )
                     .padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                // Logo
+                // Stunning Gradient Logo
                 Box(
                     modifier = Modifier
-                        .size(90.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .size(100.dp)
+                        .shadow(
+                            elevation = 20.dp,
+                            shape = RoundedCornerShape(24.dp),
+                            spotColor = GradientPurple.copy(alpha = 0.4f)
+                        )
+                        .clip(RoundedCornerShape(24.dp))
                         .background(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF4A90E2),
-                                    Color(0xFF357ABD)
+                                    GradientPurple,
+                                    GradientCyan,
+                                    GradientPink
                                 )
                             )
-                        )
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = RoundedCornerShape(20.dp),
-                            ambientColor = Color(0xFF4A90E2).copy(alpha = 0.5f)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "⚡",
-                        style = MaterialTheme.typography.displayLarge,
-                        fontSize = 48.sp
+                        fontSize = 52.sp
                     )
                 }
 
-                // Title
+                // Title with Gradient Effect
                 Text(
                     text = "Energy Station",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.5.sp
                     ),
-                    color = Color(0xFFE8F4F8),
+                    color = OnSurface,
                     fontSize = 28.sp
                 )
 
@@ -136,31 +181,39 @@ fun LoginScreen(
                 Text(
                     text = "Sales Management System",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFB8C5D0),
-                    fontSize = 13.sp
+                    color = TextSecondary,
+                    fontSize = 14.sp
                 )
 
-                // Version
-                Text(
-                    text = "v3.0.0.1",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF8996A3),
-                    fontSize = 11.sp
-                )
+                // Modern Version Badge
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = GradientPurple.copy(alpha = 0.1f)
+                ) {
+                    Text(
+                        text = "v3.0.0.1",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GradientPurple,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Username Field
+                // Username Field with Gradient Accent
                 ModernLoginTextField(
                     value = uiState.username,
                     onValueChange = viewModel::onUsernameChange,
                     label = "Username",
                     icon = Icons.Rounded.Person,
                     enabled = !uiState.isLoading,
-                    placeholder = "Enter username"
+                    placeholder = "Enter username",
+                    accentColor = GradientPurple
                 )
 
-                // Password Field
+                // Password Field with Gradient Accent
                 ModernLoginTextField(
                     value = uiState.password,
                     onValueChange = viewModel::onPasswordChange,
@@ -170,40 +223,60 @@ fun LoginScreen(
                     showPassword = showPassword,
                     onShowPasswordToggle = { showPassword = !showPassword },
                     enabled = !uiState.isLoading,
-                    placeholder = "Enter password"
+                    placeholder = "Enter password",
+                    accentColor = GradientCyan
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Login Button
+                // Stunning Gradient Login Button
                 Button(
                     onClick = viewModel::login,
                     enabled = !uiState.isLoading && uiState.username.isNotEmpty() && uiState.password.isNotEmpty(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .height(56.dp)
                         .shadow(
-                            elevation = 12.dp,
-                            shape = RoundedCornerShape(14.dp),
-                            ambientColor = Color(0xFF4A90E2).copy(alpha = 0.4f)
+                            elevation = 16.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            spotColor = GradientPurple.copy(alpha = 0.4f)
                         ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4A90E2),
-                        disabledContainerColor = Color(0xFF4A90E2).copy(alpha = 0.4f)
-                    )
+                        containerColor = Color.Transparent,
+                        disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                    ),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Text(
-                        text = "Login",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = if (!uiState.isLoading && uiState.username.isNotEmpty() && uiState.password.isNotEmpty()) {
+                                    Brush.horizontalGradient(
+                                        colors = listOf(GradientPurple, GradientCyan, GradientPink)
+                                    )
+                                } else {
+                                    Brush.horizontalGradient(
+                                        colors = listOf(Color.Gray.copy(alpha = 0.4f), Color.Gray.copy(alpha = 0.3f))
+                                    )
+                                },
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Login",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Demo Credentials
+                // Demo Credentials Card
                 DemoCredentialsLoginCard()
 
                 // Footer
@@ -211,26 +284,26 @@ fun LoginScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
+                        .padding(top = 12.dp)
                 ) {
                     Text(
                         text = "© 2024 Energy App v3.0.0.1",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF8996A3),
-                        fontSize = 10.sp
+                        color = TextSecondary,
+                        fontSize = 11.sp
                     )
                     Text(
                         text = "Full rights: Jimhawkins Korir",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF8996A3),
-                        fontSize = 10.sp
+                        color = TextSecondary,
+                        fontSize = 11.sp
                     )
                     Text(
                         text = "Powered by Hawkinsoft Solutions",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF4A90E2),
+                        color = GradientPurple,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp
+                        fontSize = 11.sp
                     )
                 }
             }
@@ -259,45 +332,64 @@ fun ModernLoginTextField(
     showPassword: Boolean = false,
     onShowPasswordToggle: (() -> Unit)? = null,
     enabled: Boolean = true,
-    placeholder: String = ""
+    placeholder: String = "",
+    accentColor: Color = GradientPurple
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFFB8C5D0),
+            color = OnSurface,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 12.sp
+            fontSize = 13.sp
         )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF0F1419))
-                .border(
-                    width = 1.dp,
-                    color = Color(0xFF4A90E2).copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(12.dp)
+                .height(56.dp)
+                .shadow(
+                    elevation = 4.dp,
+                    shape = RoundedCornerShape(14.dp),
+                    spotColor = accentColor.copy(alpha = 0.1f)
                 )
-                .padding(horizontal = 14.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(LightSurfaceVariant)
+                .border(
+                    width = 1.5.dp,
+                    color = accentColor.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = Color(0xFF4A90E2),
-                    modifier = Modifier.size(20.dp)
-                )
+                // Gradient Icon Circle
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(accentColor, accentColor.copy(alpha = 0.7f))
+                            ),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
                 TextField(
                     value = value,
@@ -307,14 +399,14 @@ fun ModernLoginTextField(
                         .weight(1f)
                         .background(Color.Transparent),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = Color(0xFFE8F4F8),
-                        fontSize = 14.sp
+                        color = OnSurface,
+                        fontSize = 15.sp
                     ),
                     placeholder = {
                         Text(
                             text = placeholder,
-                            color = Color(0xFF6B7280),
-                            fontSize = 13.sp
+                            color = TextSecondary,
+                            fontSize = 14.sp
                         )
                     },
                     visualTransformation = if (isPassword && !showPassword) {
@@ -330,20 +422,20 @@ fun ModernLoginTextField(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                         disabledIndicatorColor = Color.Transparent,
-                        cursorColor = Color(0xFF4A90E2)
+                        cursorColor = accentColor
                     )
                 )
 
                 if (isPassword && onShowPasswordToggle != null) {
                     IconButton(
                         onClick = onShowPasswordToggle,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color(0xFF4A90E2),
-                            modifier = Modifier.size(18.dp)
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -357,37 +449,60 @@ fun DemoCredentialsLoginCard() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF0F1419))
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(14.dp),
+                spotColor = NeonGreen.copy(alpha = 0.1f)
+            )
+            .clip(RoundedCornerShape(14.dp))
+            .background(SuccessLight)
             .border(
                 width = 1.dp,
-                color = Color(0xFF4A90E2).copy(alpha = 0.2f),
-                shape = RoundedCornerShape(12.dp)
+                color = Success.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(14.dp)
             )
-            .padding(12.dp)
+            .padding(14.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = "Demo Credentials",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF4A90E2),
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                listOf(IconGradientGreen1, IconGradientGreen2)
+                            ),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("💡", fontSize = 12.sp)
+                }
+                Text(
+                    text = "Demo Credentials",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Success,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
             Text(
                 text = "Admin: admin / admin123",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFFB8C5D0),
-                fontSize = 10.sp
+                color = OnSurface.copy(alpha = 0.8f),
+                fontSize = 11.sp
             )
             Text(
                 text = "User: attendant1 / pass123",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFFB8C5D0),
-                fontSize = 10.sp
+                color = OnSurface.copy(alpha = 0.8f),
+                fontSize = 11.sp
             )
         }
     }

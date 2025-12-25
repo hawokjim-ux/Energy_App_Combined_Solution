@@ -14,8 +14,15 @@ import com.energyapp.ui.screens.attendant.SalesViewModel
 import com.energyapp.ui.screens.login.LoginScreen
 import com.energyapp.ui.screens.login.LoginViewModel
 import com.energyapp.ui.screens.PumpAttendantsScreen
+import com.energyapp.ui.screens.settings.SettingsScreen
+import com.energyapp.ui.screens.settings.SettingsViewModel
+import com.energyapp.ui.screens.settings.UserRolesScreen
+import com.energyapp.ui.screens.settings.UserRolesViewModel
+import com.energyapp.ui.screens.license.LicenseManagementScreen
+import com.energyapp.ui.screens.license.LicenseViewModel
 import com.energyapp.ui.viewmodels.PumpAttendantsViewModel
 import com.energyapp.util.Constants
+import com.energyapp.util.LicenseManager
 import com.energyapp.util.PreferencesManager
 import kotlinx.coroutines.launch
 
@@ -34,13 +41,18 @@ fun NavGraph(
             LoginScreen(
                 viewModel = viewModel,
                 onLoginSuccess = { roleName ->
-                    if (roleName == "Admin") {
-                        navController.navigate(Screen.AdminDashboard.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
+                    // Navigate based on role - use permissions for access control
+                    when (roleName?.lowercase()) {
+                        "pump attendant", "attendant" -> {
+                            navController.navigate(Screen.AttendantDashboard.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
                         }
-                    } else {
-                        navController.navigate(Screen.AttendantDashboard.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
+                        else -> {
+                            // Admin, Manager, Supervisor, Director, Super Admin
+                            navController.navigate(Screen.AdminDashboard.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
                         }
                     }
                 }
@@ -49,7 +61,14 @@ fun NavGraph(
 
         composable(Screen.AdminDashboard.route) {
             val fullName by preferencesManager.fullName.collectAsState(initial = "Admin")
+            val roleName by preferencesManager.roleName.collectAsState(initial = null)
+            val viewModel: AdminDashboardViewModel = hiltViewModel()
+            
+            // Check if user is Super Admin
+            val isSuperAdmin = roleName?.lowercase() == "super admin"
+            
             AdminDashboardScreen(
+                viewModel = viewModel,
                 fullName = fullName ?: "Admin",
                 onNavigateToUserManagement = {
                     navController.navigate(Screen.UserManagement.route)
@@ -66,6 +85,31 @@ fun NavGraph(
                 onNavigateToPumpAttendants = {
                     navController.navigate(Screen.PumpAttendants.route)
                 },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
+                },
+                onNavigateToTransactions = {
+                    navController.navigate(Screen.Transactions.route)
+                },
+                onNavigateToPumpManagement = {
+                    navController.navigate(Screen.PumpManagement.route)
+                },
+                onNavigateToShiftDefinition = {
+                    navController.navigate(Screen.ShiftDefinition.route)
+                },
+                onNavigateToAttendantManagement = {
+                    navController.navigate(Screen.AttendantManagement.route)
+                },
+                onNavigateToUserLoginManagement = {
+                    navController.navigate(Screen.UserLoginManagement.route)
+                },
+                onNavigateToLicenseManagement = {
+                    navController.navigate(Screen.LicenseManagement.route)
+                },
+                onNavigateToLicenseList = {
+                    navController.navigate(Screen.LicenseList.route)
+                },
+                isSuperAdmin = isSuperAdmin,
                 onLogout = {
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
                         preferencesManager.clearUserSession()
@@ -139,6 +183,86 @@ fun NavGraph(
             val viewModel: PumpAttendantsViewModel = hiltViewModel()
             PumpAttendantsScreen(
                 viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToUserRoles = {
+                    navController.navigate(Screen.UserRoles.route)
+                }
+            )
+        }
+
+        composable(Screen.UserRoles.route) {
+            val viewModel: UserRolesViewModel = hiltViewModel()
+            UserRolesScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Transactions.route) {
+            val viewModel: TransactionsViewModel = hiltViewModel()
+            TransactionsScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.PumpManagement.route) {
+            val viewModel: PumpManagementViewModel = hiltViewModel()
+            PumpManagementScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+
+        composable(Screen.ShiftDefinition.route) {
+            val viewModel: ShiftDefinitionViewModel = hiltViewModel()
+            ShiftDefinitionScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.AttendantManagement.route) {
+            val viewModel: AttendantManagementViewModel = hiltViewModel()
+            AttendantManagementScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+
+        composable(Screen.UserLoginManagement.route) {
+            val viewModel: LoginManagementViewModel = hiltViewModel()
+            LoginManagementScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+
+        // Super Admin only - License Management (Generate)
+        composable(Screen.LicenseManagement.route) {
+            val viewModel: LicenseViewModel = hiltViewModel()
+            LicenseManagementScreen(
+                licenseManager = viewModel.licenseManager,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Super Admin only - License List (View All)
+        composable(Screen.LicenseList.route) {
+            val viewModel: LicenseViewModel = hiltViewModel()
+            com.energyapp.ui.screens.license.LicenseListScreen(
+                licenseManager = viewModel.licenseManager,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

@@ -19,27 +19,27 @@ import javax.inject.Singleton
 
 // ==================== Retrofit Interface ====================
 interface SupabaseApi {
-    @GET("users")
+    @GET("users_new")
     suspend fun getUsers(
         @Query("select") select: String = "*,user_roles(role_name)"
     ): List<UserWithRole>
 
-    @GET("users")
+    @GET("users_new")
     suspend fun getUserByUsername(
         @Query("username") username: String,
         @Query("select") select: String = "*,user_roles(role_name)"
     ): List<UserWithRole>
 
-    @POST("users")
+    @POST("users_new")
     suspend fun createUser(@Body user: Map<String, @JvmSuppressWildcards Any>): List<UserWithRole>
 
-    @PATCH("users")
+    @PATCH("users_new")
     suspend fun updateUser(
         @Query("user_id") userId: String,
         @Body updateData: Map<String, @JvmSuppressWildcards Any>
     ): List<UserWithRole>
 
-    @DELETE("users")
+    @DELETE("users_new")
     suspend fun deleteUser(
         @Query("user_id") userId: String
     )
@@ -48,6 +48,37 @@ interface SupabaseApi {
     suspend fun getPumps(
         @Query("is_active") isActive: String = "eq.true"
     ): List<PumpResponse>
+
+    @GET("pumps")
+    suspend fun getAllPumps(): List<PumpResponse>
+
+    @POST("pumps")
+    suspend fun createPump(@Body pump: Map<String, @JvmSuppressWildcards Any>): List<PumpResponse>
+
+    @PATCH("pumps")
+    suspend fun updatePump(
+        @Query("pump_id") pumpId: String,
+        @Body updateData: Map<String, @JvmSuppressWildcards Any>
+    ): List<PumpResponse>
+
+    @DELETE("pumps")
+    suspend fun deletePump(
+        @Query("pump_id") pumpId: String
+    )
+
+    @POST("shifts")
+    suspend fun createShift(@Body shift: Map<String, @JvmSuppressWildcards Any>): List<ShiftResponse>
+
+    @PATCH("shifts")
+    suspend fun updateShift(
+        @Query("shift_id") shiftId: String,
+        @Body updateData: Map<String, @JvmSuppressWildcards Any>
+    ): List<ShiftResponse>
+
+    @DELETE("shifts")
+    suspend fun deleteShift(
+        @Query("shift_id") shiftId: String
+    )
 
     @GET("shifts")
     suspend fun getShifts(): List<ShiftResponse>
@@ -66,58 +97,84 @@ interface SupabaseApi {
         @Body request: CloseShiftRequest
     ): List<PumpShiftResponse>
 
-    @GET("sales_records")
+    // FIXED: Changed from sales_records to sales
+    @GET("sales")
     suspend fun getAllSales(
-        @Query("order") order: String = "sale_time.desc"
+        @Query("order") order: String = "created_at.desc"
     ): List<SaleResponse>
 
-    @GET("sales_records")
+    @GET("sales")
     suspend fun getSalesByAttendant(
         @Query("attendant_id") attendantId: String,
-        @Query("order") order: String = "sale_time.desc"
+        @Query("order") order: String = "created_at.desc"
     ): List<SaleResponse>
 
-    @POST("sales_records")
+    @POST("sales")
     suspend fun createSale(@Body saleRecord: Map<String, @JvmSuppressWildcards Any>): List<SaleResponse>
 
-    @PATCH("sales_records")
+    // FIXED: Changed from sales_records to sales
+    @PATCH("sales")
     suspend fun updateSaleStatus(
         @Query("sale_id") saleId: String,
         @Body updateData: Map<String, @JvmSuppressWildcards Any>
     ): List<SaleResponse>
+
+    // ==================== License Management ====================
+    @GET("app_licenses")
+    suspend fun getAllLicenses(
+        @Query("order") order: String = "created_at.desc"
+    ): List<LicenseDbResponse>
+
+    @GET("app_licenses")
+    suspend fun getLicenseByKey(
+        @Query("license_key") licenseKey: String
+    ): List<LicenseDbResponse>
+
+    @GET("app_licenses")
+    suspend fun getLicenseByDeviceId(
+        @Query("activation_device_id") deviceId: String
+    ): List<LicenseDbResponse>
+
+    @GET("app_licenses")
+    suspend fun getLicenseByPhone(
+        @Query("client_phone") clientPhone: String
+    ): List<LicenseDbResponse>
+
+    @POST("app_licenses")
+    suspend fun createLicense(@Body license: Map<String, @JvmSuppressWildcards Any?>): List<LicenseDbResponse>
+
+    @PATCH("app_licenses")
+    suspend fun updateLicense(
+        @Query("license_key") licenseKey: String,
+        @Body updateData: Map<String, @JvmSuppressWildcards Any?>
+    ): List<LicenseDbResponse>
+
+    @PATCH("app_licenses")
+    suspend fun revokeLicense(
+        @Query("license_id") licenseId: String,
+        @Body updateData: Map<String, @JvmSuppressWildcards Any?>
+    ): List<LicenseDbResponse>
 }
 
 // ==================== Data Models ====================
 data class UserWithRole(
-    @SerializedName("user_id")
-    val userId: Int,
-    @SerializedName("full_name")
-    val fullName: String,
+    @SerializedName("user_id") val userId: Int,
+    @SerializedName("full_name") val fullName: String,
     val username: String,
-    @SerializedName("mobile_no")
-    val mobileNo: String?,
-    @SerializedName("role_id")
-    val roleId: Int,
-    @SerializedName("is_active")
-    val isActive: Boolean,
-    @SerializedName("password_hash")
-    val passwordHash: String? = null,
-    @SerializedName("user_roles")
-    val userRoles: RoleData? = null
+    @SerializedName("mobile_no") val mobileNo: String?,
+    @SerializedName("role_id") val roleId: Int,
+    @SerializedName("is_active") val isActive: Boolean,
+    @SerializedName("password_hash") val passwordHash: String? = null,
+    @SerializedName("user_roles") val userRoles: RoleData? = null
 )
 
 data class CreateUserRequest(
-    @SerializedName("full_name")
-    val fullName: String,
+    @SerializedName("full_name") val fullName: String,
     val username: String,
-    @SerializedName("mobile_no")
-    val mobileNo: String? = null,
-    @SerializedName("role_id")
-    val roleId: Int,
-    @SerializedName("is_active")
-    val isActive: Boolean = true,
-    @SerializedName("password_hash")
-    val passwordHash: String
+    @SerializedName("mobile_no") val mobileNo: String? = null,
+    @SerializedName("role_id") val roleId: Int,
+    @SerializedName("is_active") val isActive: Boolean = true,
+    @SerializedName("password_hash") val passwordHash: String
 )
 
 fun CreateUserRequest.toInsertMap(): Map<String, Any> {
@@ -128,17 +185,34 @@ fun CreateUserRequest.toInsertMap(): Map<String, Any> {
         "is_active" to isActive,
         "password_hash" to passwordHash
     )
-
-    mobileNo?.takeIf { it.isNotBlank() }?.let {
-        map["mobile_no"] = it
-    }
-
+    mobileNo?.takeIf { it.isNotBlank() }?.let { map["mobile_no"] = it }
     return map
 }
 
 data class RoleData(
-    @SerializedName("role_name")
-    val roleName: String
+    @SerializedName("role_name") val roleName: String
+)
+
+// License Database Response Model
+data class LicenseDbResponse(
+    @SerializedName("license_id") val licenseId: Int,
+    @SerializedName("license_key") val licenseKey: String,
+    @SerializedName("license_type") val licenseType: String,
+    @SerializedName("client_name") val clientName: String?,
+    @SerializedName("client_phone") val clientPhone: String?,
+    @SerializedName("duration_days") val durationDays: Int,
+    @SerializedName("max_devices") val maxDevices: Int,
+    @SerializedName("is_activated") val isActivated: Boolean,
+    @SerializedName("activation_device_id") val activationDeviceId: String?,
+    @SerializedName("activation_date") val activationDate: String?,
+    @SerializedName("expiration_date") val expirationDate: String?,
+    @SerializedName("created_at") val createdAt: String?,
+    @SerializedName("created_by") val createdBy: String?,
+    @SerializedName("activation_count") val activationCount: Int,
+    @SerializedName("is_revoked") val isRevoked: Boolean,
+    @SerializedName("revoked_reason") val revokedReason: String?,
+    @SerializedName("device_manufacturer") val deviceManufacturer: String?,
+    @SerializedName("device_model") val deviceModel: String?
 )
 
 // ==================== Main Service ====================
@@ -146,13 +220,12 @@ data class RoleData(
 class SupabaseApiService @Inject constructor(
     private val mpesaBackendService: MpesaBackendService
 ) {
-
     private val TAG = "SupabaseApiService"
     private val api: SupabaseApi
 
     companion object {
-        private const val SUPABASE_URL = "https://acqfnlizrkpfmogyxhtu.supabase.co/rest/v1/"
-        private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWZubGl6cmtwZm1vZ3l4aHR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NjAxNTcsImV4cCI6MjA4MTAzNjE1N30.jOP8Hesw8ybi4ooRVgf8JiYyKsDtHTzDFuCfHS3PH6Y"
+        private const val SUPABASE_URL = "https://pxcdaivlvltmdifxietb.supabase.co/rest/v1/"
+        private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2RhaXZsdmx0bWRpZnhpZXRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NDI3NDIsImV4cCI6MjA4MTMxODc0Mn0.s6nv24s6M83gAcW_nSKCBfcXcqJ_7owwqdObPDT7Ky0"
     }
 
     init {
@@ -198,19 +271,16 @@ class SupabaseApiService @Inject constructor(
             val trimmedUsername = username.trim()
             val users = api.getUserByUsername("eq.$trimmedUsername")
             Log.d(TAG, "🔍 Query returned ${users.size} user(s)")
-
             val user = users.firstOrNull { it.isActive }
             if (user == null) {
                 Log.e(TAG, "❌ No active user found with username: $trimmedUsername")
                 return@withContext Result.failure(Exception("Invalid username or password"))
             }
-
             Log.d(TAG, "🔑 Validating password for user: $trimmedUsername")
             if (!validatePassword(password, user.passwordHash)) {
                 Log.e(TAG, "❌ Password validation failed for user: $trimmedUsername")
                 return@withContext Result.failure(Exception("Invalid username or password"))
             }
-
             Log.d(TAG, "✅ Login successful for user: ${user.username}")
             val roleName = user.userRoles?.roleName ?: "Unknown"
             val userResponse = UserResponse(
@@ -254,6 +324,70 @@ class SupabaseApiService @Inject constructor(
         }
     }
 
+    suspend fun getAllPumps(): Result<List<PumpResponse>> = withContext(Dispatchers.IO) {
+        try {
+            val pumps = api.getAllPumps()
+            Result.success(pumps)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching all pumps: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createPump(name: String, type: String): Result<PumpResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🚀 Creating pump: $name")
+            val pumpData = mapOf<String, Any>(
+                "pump_name" to name,
+                "pump_type" to type,
+                "is_active" to true
+            )
+            val result = api.createPump(pumpData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ Pump created successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to create pump"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error creating pump: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updatePump(pumpId: Int, name: String, type: String, isActive: Boolean): Result<PumpResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔄 Updating pump: $pumpId")
+            val updateData = mapOf<String, Any>(
+                "pump_name" to name,
+                "pump_type" to type,
+                "is_active" to isActive
+            )
+            val result = api.updatePump("eq.$pumpId", updateData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ Pump updated successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to update pump"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error updating pump: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deletePump(pumpId: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🗑️ Deleting pump: $pumpId")
+            api.deletePump("eq.$pumpId")
+            Log.d(TAG, "✅ Pump deleted successfully")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error deleting pump: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     // ==================== Shifts ====================
     suspend fun getShifts(): Result<List<ShiftResponse>> = withContext(Dispatchers.IO) {
         try {
@@ -261,6 +395,60 @@ class SupabaseApiService @Inject constructor(
             Result.success(shifts)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error fetching shifts: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createShiftDefinition(name: String, startTime: String, endTime: String): Result<ShiftResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🚀 Creating shift: $name")
+            val shiftData = mapOf<String, Any>(
+                "shift_name" to name,
+                "start_time" to startTime,
+                "end_time" to endTime
+            )
+            val result = api.createShift(shiftData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ Shift created successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to create shift"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error creating shift: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateShiftDefinition(shiftId: Int, name: String, startTime: String, endTime: String): Result<ShiftResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔄 Updating shift: $shiftId")
+            val updateData = mapOf<String, Any>(
+                "shift_name" to name,
+                "start_time" to startTime,
+                "end_time" to endTime
+            )
+            val result = api.updateShift("eq.$shiftId", updateData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ Shift updated successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to update shift"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error updating shift: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteShiftDefinition(shiftId: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🗑️ Deleting shift: $shiftId")
+            api.deleteShift("eq.$shiftId")
+            Log.d(TAG, "✅ Shift deleted successfully")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error deleting shift: ${e.message}")
             Result.failure(e)
         }
     }
@@ -307,7 +495,6 @@ class SupabaseApiService @Inject constructor(
     suspend fun createSale(request: CreateSaleRequest): Result<SaleResponse> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "📝 Creating sale record: ${request.saleIdNo}")
-
             val saleRecord = mapOf<String, Any>(
                 "sale_id_no" to request.saleIdNo,
                 "pump_shift_id" to request.pumpShiftId,
@@ -318,9 +505,7 @@ class SupabaseApiService @Inject constructor(
                 "transaction_status" to request.transactionStatus,
                 "checkout_request_id" to (request.checkoutRequestId ?: "")
             )
-
             val sales = api.createSale(saleRecord)
-
             if (sales.isNotEmpty()) {
                 Log.d(TAG, "✅ Sale record created with ID: ${sales.first().saleId}")
                 Result.success(sales.first())
@@ -341,17 +526,11 @@ class SupabaseApiService @Inject constructor(
     ): Result<SaleResponse> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🔄 Updating sale $saleId status to: $status")
-
             val updateMap = mutableMapOf<String, Any>(
                 "transaction_status" to status
             )
-
-            mpesaReceipt?.let {
-                updateMap["mpesa_receipt_number"] = it
-            }
-
+            mpesaReceipt?.let { updateMap["mpesa_receipt_number"] = it }
             val result = api.updateSaleStatus("eq.$saleId", updateMap)
-
             if (result.isNotEmpty()) {
                 Log.d(TAG, "✅ Sale status updated successfully")
                 Result.success(result.first())
@@ -396,11 +575,9 @@ class SupabaseApiService @Inject constructor(
             } else {
                 api.getAllSales()
             }
-
             val total = sales
                 .filter { it.transactionStatus == "SUCCESS" }
                 .sumOf { it.amount }
-
             Log.d(TAG, "💰 Daily total: KES $total")
             Result.success(total)
         } catch (e: Exception) {
@@ -433,18 +610,40 @@ class SupabaseApiService @Inject constructor(
     suspend fun initiateMpesaSTKPush(request: MpesaSTKPushRequest): Result<MpesaSTKPushResponse> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🚀 Initiating M-Pesa STK Push...")
-            Log.d(TAG, "📱 Mobile: ${request.mobileNo}, Amount: ${request.amount}")
 
-            val mobileNumber = request.mobileNo ?: return@withContext Result.failure(Exception("Mobile number is required"))
+            // FIXED: Clean and format phone number properly
+            val rawPhone = request.mobileNo ?: return@withContext Result.failure(Exception("Mobile number is required"))
+            val cleanPhone = rawPhone.replace(Regex("[^0-9]"), "")
 
+            val formattedPhone = when {
+                cleanPhone.startsWith("254") && cleanPhone.length == 12 -> cleanPhone
+                cleanPhone.startsWith("0") && cleanPhone.length == 10 -> "254${cleanPhone.substring(1)}"
+                cleanPhone.startsWith("+254") -> cleanPhone.substring(1)
+                cleanPhone.length == 9 -> "254$cleanPhone"
+                else -> {
+                    Log.e(TAG, "❌ Invalid phone number format: $rawPhone")
+                    return@withContext Result.failure(Exception("Invalid phone number format. Use 254XXXXXXXXX or 07XXXXXXXX"))
+                }
+            }
+
+            if (formattedPhone.length != 12) {
+                Log.e(TAG, "❌ Phone number must be 12 digits: $formattedPhone")
+                return@withContext Result.failure(Exception("Phone number must be 12 digits (254XXXXXXXXX)"))
+            }
+
+            Log.d(TAG, "📱 Formatted phone: $formattedPhone, Amount: ${request.amount}")
+
+            // Generate unique sale ID
             val saleIdNo = "SALE_${System.currentTimeMillis()}"
+
+            // Create pending sale record
             val saleRecord = mapOf<String, Any>(
                 "sale_id_no" to saleIdNo,
                 "pump_shift_id" to (request.pumpShiftId ?: 0),
                 "pump_id" to (request.pumpId ?: 0),
                 "attendant_id" to (request.attendantId ?: 0),
                 "amount" to request.amount,
-                "customer_mobile_no" to mobileNumber,
+                "customer_mobile_no" to formattedPhone,
                 "transaction_status" to "PENDING"
             )
 
@@ -452,39 +651,59 @@ class SupabaseApiService @Inject constructor(
             if (sales.isEmpty()) {
                 return@withContext Result.failure(Exception("Failed to create sale record"))
             }
+
             val sale = sales.first()
             Log.d(TAG, "✅ Pending sale record created with ID: ${sale.saleId}")
 
+            // FIXED: Use proper amount (must be integer for M-Pesa)
             val stkPushRequest = MpesaStkRequest(
-                amount = request.amount,
-                phone = mobileNumber,
+                amount = request.amount.toInt().toDouble(), // Ensure no decimals
+                phone = formattedPhone,
                 account = saleIdNo,
-                description = "Fuel Payment"
+                description = "Fuel Payment - ${request.pumpId?.let { "Pump $it" } ?: "Energy App"}",
+                pumpId = request.pumpId?.toString() ?: "0",
+                shiftId = request.pumpShiftId?.toString() ?: "0",
+                userId = request.attendantId?.toString() ?: "0"
             )
 
+            Log.d(TAG, "📤 Sending STK Push request to backend...")
             val stkResponse = mpesaBackendService.initiateStkPush(stkPushRequest)
 
             if (!stkResponse.success) {
+                Log.e(TAG, "❌ STK Push failed: ${stkResponse.message}")
                 updateSaleStatusInternal(sale.saleId, "FAILED")
                 return@withContext Result.failure(Exception(stkResponse.message))
             }
 
             Log.d(TAG, "✅ STK Push sent to customer's phone")
+            Log.d(TAG, "🎫 Checkout Request ID: ${stkResponse.checkoutRequestID}")
 
+            // Update sale with checkout request ID
             val checkoutRequestID = stkResponse.checkoutRequestID
             if (!checkoutRequestID.isNullOrEmpty()) {
-                pollTransactionStatus(checkoutRequestID, sale.saleId, 30)
+                try {
+                    val updateMap = mapOf<String, Any>("checkout_request_id" to checkoutRequestID)
+                    api.updateSaleStatus("eq.${sale.saleId}", updateMap)
+                    Log.d(TAG, "✅ Sale updated with checkout request ID")
+                } catch (e: Exception) {
+                    Log.e(TAG, "⚠️ Failed to update checkout request ID: ${e.message}")
+                }
+
+                // Start polling for transaction status
+                pollTransactionStatus(checkoutRequestID, sale.saleId, 24)
             }
 
-            Result.success(MpesaSTKPushResponse(
-                success = true,
-                message = "Payment request sent. Please enter M-Pesa PIN on your phone.",
-                transactionStatus = "PENDING",
-                resultDescription = "Payment request sent",
-                saleId = sale.saleId,
-                mpesaReceiptNumber = null,
-                checkoutRequestID = checkoutRequestID
-            ))
+            Result.success(
+                MpesaSTKPushResponse(
+                    success = true,
+                    message = "Payment request sent. Please check your phone for M-Pesa prompt.",
+                    transactionStatus = "PENDING",
+                    resultDescription = "Payment request sent to ${formattedPhone}",
+                    saleId = sale.saleId,
+                    mpesaReceiptNumber = null,
+                    checkoutRequestID = checkoutRequestID
+                )
+            )
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error initiating M-Pesa payment: ${e.message}")
             e.printStackTrace()
@@ -498,54 +717,70 @@ class SupabaseApiService @Inject constructor(
         maxAttempts: Int
     ) = withContext(Dispatchers.IO) {
         try {
+            Log.d(TAG, "🔄 Starting transaction polling for sale $saleId")
             var attempts = 0
+
             while (attempts < maxAttempts) {
-                delay(2000)
+                delay(5000) // Wait 5 seconds between polls
                 attempts++
 
                 Log.d(TAG, "🔍 Polling transaction status (attempt $attempts/$maxAttempts)...")
 
-                val statusResponse = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
+                try {
+                    val statusResponse = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
 
-                when (statusResponse.resultCode) {
-                    0 -> {
-                        Log.d(TAG, "✅ Transaction successful!")
-                        updateSaleStatusInternal(
-                            saleId = saleId,
-                            status = "SUCCESS",
-                            mpesaCode = statusResponse.mpesaReceiptNumber ?: "MP${System.currentTimeMillis()}"
-                        )
-                        return@withContext
-                    }
-                    1032 -> {
-                        Log.d(TAG, "❌ Transaction cancelled by user")
-                        updateSaleStatusInternal(saleId, "CANCELLED")
-                        return@withContext
-                    }
-                    1 -> {
-                        Log.d(TAG, "❌ Insufficient funds")
-                        updateSaleStatusInternal(saleId, "FAILED")
-                        return@withContext
-                    }
-                    1037 -> {
-                        Log.d(TAG, "⏰ Transaction timeout")
-                        updateSaleStatusInternal(saleId, "TIMEOUT")
-                        return@withContext
-                    }
-                    else -> {
-                        if (statusResponse.resultCode != null) {
-                            Log.d(TAG, "❌ Transaction failed: ${statusResponse.resultDesc}")
+                    Log.d(TAG, "📊 Status: ResultCode=${statusResponse.resultCode}, Desc=${statusResponse.resultDesc}")
+
+                    when (statusResponse.resultCode) {
+                        0 -> {
+                            Log.d(TAG, "✅ Transaction successful!")
+                            val receipt = statusResponse.mpesaReceiptNumber ?: "MP${System.currentTimeMillis()}"
+                            updateSaleStatusInternal(
+                                saleId = saleId,
+                                status = "SUCCESS",
+                                mpesaCode = receipt
+                            )
+                            return@withContext
+                        }
+                        1032 -> {
+                            Log.d(TAG, "❌ Transaction cancelled by user")
+                            updateSaleStatusInternal(saleId, "CANCELLED")
+                            return@withContext
+                        }
+                        1 -> {
+                            Log.d(TAG, "❌ Insufficient funds")
+                            updateSaleStatusInternal(saleId, "FAILED")
+                            return@withContext
+                        }
+                        1037 -> {
+                            Log.d(TAG, "⏰ Transaction timeout")
+                            updateSaleStatusInternal(saleId, "TIMEOUT")
+                            return@withContext
+                        }
+                        null -> {
+                            // Still pending, continue polling
+                            Log.d(TAG, "⏳ Transaction still pending...")
+                        }
+                        else -> {
+                            // Some other error occurred
+                            Log.d(TAG, "❌ Transaction failed with code ${statusResponse.resultCode}: ${statusResponse.resultDesc}")
                             updateSaleStatusInternal(saleId, "FAILED")
                             return@withContext
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "⚠️ Error in poll attempt $attempts: ${e.message}")
+                    // Continue polling even if one attempt fails
                 }
             }
 
-            Log.d(TAG, "⏰ Polling timeout - transaction still pending")
+            // Max attempts reached, still pending
+            Log.d(TAG, "⏰ Polling timeout after $maxAttempts attempts - transaction still pending")
             updateSaleStatusInternal(saleId, "TIMEOUT")
+
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error polling transaction status: ${e.message}")
+            Log.e(TAG, "❌ Error in polling loop: ${e.message}")
+            updateSaleStatusInternal(saleId, "TIMEOUT")
         }
     }
 
@@ -555,13 +790,18 @@ class SupabaseApiService @Inject constructor(
         mpesaCode: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
+            Log.d(TAG, "🔄 Updating sale $saleId to status: $status")
             val updateMap = mutableMapOf<String, Any>("transaction_status" to status)
-            mpesaCode?.let { updateMap["mpesa_transaction_code"] = it }
+            mpesaCode?.let {
+                updateMap["mpesa_receipt_number"] = it
+                Log.d(TAG, "💳 M-Pesa Receipt: $it")
+            }
 
             api.updateSaleStatus("eq.$saleId", updateMap)
             Log.d(TAG, "✅ Sale $saleId updated to $status")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to update sale status: ${e.message}")
+            e.printStackTrace()
         }
     }
 
@@ -639,7 +879,6 @@ class SupabaseApiService @Inject constructor(
     ): Result<UserResponse> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🚀 Creating user - $username")
-
             if (fullName.isBlank()) {
                 return@withContext Result.failure(Exception("Full name cannot be empty"))
             }
@@ -649,10 +888,8 @@ class SupabaseApiService @Inject constructor(
             if (password.length < 6) {
                 return@withContext Result.failure(Exception("Password must be at least 6 characters"))
             }
-
             val passwordHash = BCrypt.hashpw(password, BCrypt.gensalt(12))
             Log.d(TAG, "🔐 Password hashed successfully")
-
             val createUserRequest = CreateUserRequest(
                 fullName = fullName.trim(),
                 username = username.trim(),
@@ -661,16 +898,12 @@ class SupabaseApiService @Inject constructor(
                 isActive = true,
                 passwordHash = passwordHash
             )
-
             val createdUsers = api.createUser(createUserRequest.toInsertMap())
-
             if (createdUsers.isEmpty()) {
                 return@withContext Result.failure(Exception("Failed to create user"))
             }
-
             val createdUser = createdUsers.first()
             Log.d(TAG, "✅ User created successfully - ${createdUser.username}")
-
             val roleName = createdUser.userRoles?.roleName ?: "Unknown"
             val userResponse = UserResponse(
                 userId = createdUser.userId,
@@ -684,15 +917,28 @@ class SupabaseApiService @Inject constructor(
             Result.success(userResponse)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to create user - ${e.message}")
+            Log.e(TAG, "❌ Full error: ${e.stackTraceToString()}")
             e.printStackTrace()
-
+            
+            // Get the actual error message for debugging
+            val rawMessage = e.message ?: "Unknown error"
+            Log.e(TAG, "❌ Raw error message: $rawMessage")
+            
+            // Try to get the response body for more details
             val errorMessage = when {
-                e.message?.contains("duplicate") == true || e.message?.contains("409") == true ->
-                    "Username already exists"
-                e.message?.contains("400") == true -> "Invalid user data"
-                else -> "Failed to create user: ${e.message}"
+                rawMessage.contains("23503", ignoreCase = true) -> "Invalid role selected - role does not exist"
+                rawMessage.contains("role_id", ignoreCase = true) -> "Invalid role selected - role does not exist"
+                rawMessage.contains("foreign key", ignoreCase = true) -> "Invalid role selected - role does not exist"
+                rawMessage.contains("duplicate", ignoreCase = true) -> "Username already exists"
+                rawMessage.contains("unique", ignoreCase = true) -> "Username already exists"
+                rawMessage.contains("23505", ignoreCase = true) -> "Username already exists"  // Unique violation code
+                rawMessage.contains("400") -> "Invalid user data: $rawMessage"
+                rawMessage.contains("401") -> "Unauthorized - check API key"
+                rawMessage.contains("403") -> "Forbidden - RLS policy may be blocking insert"
+                rawMessage.contains("409") -> "Conflict error - check role selection or username"
+                rawMessage.contains("500") -> "Server error"
+                else -> "Failed to create user: $rawMessage"
             }
-
             Result.failure(Exception(errorMessage))
         }
     }
@@ -708,11 +954,9 @@ class SupabaseApiService @Inject constructor(
             fullName?.let { updateMap["full_name"] = it }
             mobileNo?.let { updateMap["mobile_no"] = it }
             isActive?.let { updateMap["is_active"] = it }
-
             if (updateMap.isEmpty()) {
                 return@withContext Result.failure(Exception("No fields to update"))
             }
-
             val result = api.updateUser("eq.$userId", updateMap)
             if (result.isNotEmpty()) {
                 val updatedUser = result.first()
@@ -742,6 +986,240 @@ class SupabaseApiService @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error deleting user: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // ==================== License Management ====================
+    
+    /**
+     * Create a new license in the database
+     */
+    suspend fun createLicenseInDb(
+        licenseKey: String,
+        licenseType: String,
+        clientName: String?,
+        clientPhone: String?,
+        durationDays: Int,
+        maxDevices: Int
+    ): Result<LicenseDbResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔑 Creating license in database: $licenseKey")
+            val licenseData = mapOf<String, Any?>(
+                "license_key" to licenseKey,
+                "license_type" to licenseType,
+                "client_name" to clientName,
+                "client_phone" to clientPhone,
+                "duration_days" to durationDays,
+                "max_devices" to maxDevices,
+                "is_activated" to false,
+                "activation_count" to 0,
+                "is_revoked" to false
+            )
+            val result = api.createLicense(licenseData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ License created in database")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to create license in database"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error creating license: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Check if license exists and get its details from database
+     */
+    suspend fun checkLicenseInDb(licenseKey: String): Result<LicenseDbResponse?> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔍 Checking license in database: $licenseKey")
+            val results = api.getLicenseByKey("eq.$licenseKey")
+            if (results.isNotEmpty()) {
+                Log.d(TAG, "✅ License found in database")
+                Result.success(results.first())
+            } else {
+                Log.d(TAG, "⚠️ License not found in database")
+                Result.success(null)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking license: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Activate license on a device
+     */
+    suspend fun activateLicenseInDb(
+        licenseKey: String,
+        deviceId: String,
+        deviceManufacturer: String,
+        deviceModel: String
+    ): Result<LicenseDbResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔓 Activating license: $licenseKey for device: $deviceId")
+            
+            // Calculate expiration date
+            val checkResult = checkLicenseInDb(licenseKey)
+            if (checkResult.isFailure || checkResult.getOrNull() == null) {
+                return@withContext Result.failure(Exception("License not found in database"))
+            }
+            
+            val license = checkResult.getOrNull()!!
+            
+            // Check if already activated on different device
+            if (license.isActivated && license.activationDeviceId != deviceId) {
+                return@withContext Result.failure(Exception(
+                    "License already activated on another device.\nContact: +254720316175"
+                ))
+            }
+            
+            // Check if revoked
+            if (license.isRevoked) {
+                return@withContext Result.failure(Exception(
+                    "This license has been revoked.\nContact: +254720316175"
+                ))
+            }
+            
+            // Calculate expiration
+            val now = java.time.Instant.now()
+            val expirationInstant = now.plusSeconds(license.durationDays.toLong() * 24 * 60 * 60)
+            val activationDate = now.toString()
+            val expirationDate = expirationInstant.toString()
+            
+            val updateData = mapOf<String, Any?>(
+                "is_activated" to true,
+                "activation_device_id" to deviceId,
+                "activation_date" to activationDate,
+                "expiration_date" to expirationDate,
+                "activation_count" to (license.activationCount + 1),
+                "device_manufacturer" to deviceManufacturer,
+                "device_model" to deviceModel,
+                "last_check_date" to activationDate
+            )
+            
+            val result = api.updateLicense("eq.$licenseKey", updateData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ License activated successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to activate license"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error activating license: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get all licenses from database
+     */
+    suspend fun getAllLicenses(): Result<List<LicenseDbResponse>> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "📋 Fetching all licenses from database")
+            val licenses = api.getAllLicenses()
+            Log.d(TAG, "✅ Retrieved ${licenses.size} licenses")
+            Result.success(licenses)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching licenses: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Check if device has valid license
+     */
+    suspend fun checkDeviceLicense(deviceId: String): Result<LicenseDbResponse?> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔍 Checking device license: $deviceId")
+            val results = api.getLicenseByDeviceId("eq.$deviceId")
+            val validLicense = results.firstOrNull { license ->
+                license.isActivated && !license.isRevoked && 
+                license.expirationDate?.let { expDate ->
+                    try {
+                        val expInstant = java.time.Instant.parse(expDate)
+                        expInstant.isAfter(java.time.Instant.now())
+                    } catch (e: Exception) { false }
+                } ?: false
+            }
+            Result.success(validLicense)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking device license: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Check if phone number already has a license (for duplicate prevention)
+     */
+    suspend fun checkPhoneDuplicate(phoneNumber: String): Result<LicenseDbResponse?> = withContext(Dispatchers.IO) {
+        try {
+            if (phoneNumber.isBlank()) {
+                return@withContext Result.success(null) // No phone = no duplicate
+            }
+            
+            // Normalize phone number - remove spaces, handle both formats
+            val cleanPhone = phoneNumber.trim().replace(" ", "")
+            
+            Log.d(TAG, "🔍 Checking for duplicate phone: $cleanPhone")
+            
+            // Try to find exact match first
+            var results = api.getLicenseByPhone("eq.$cleanPhone")
+            
+            // If not found and starts with 0, try with 254 prefix
+            if (results.isEmpty() && cleanPhone.startsWith("0")) {
+                val with254 = "254${cleanPhone.substring(1)}"
+                results = api.getLicenseByPhone("eq.$with254")
+            }
+            
+            // If not found and starts with 254, try with 0 prefix
+            if (results.isEmpty() && cleanPhone.startsWith("254")) {
+                val with0 = "0${cleanPhone.substring(3)}"
+                results = api.getLicenseByPhone("eq.$with0")
+            }
+            
+            // If not found and starts with +254, try without +
+            if (results.isEmpty() && cleanPhone.startsWith("+254")) {
+                val without = cleanPhone.substring(1)
+                results = api.getLicenseByPhone("eq.$without")
+            }
+            
+            val existingLicense = results.firstOrNull()
+            if (existingLicense != null) {
+                Log.d(TAG, "⚠️ Duplicate phone found - License: ${existingLicense.licenseKey}")
+            } else {
+                Log.d(TAG, "✅ No duplicate phone found")
+            }
+            
+            Result.success(existingLicense)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking phone duplicate: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Revoke a license
+     */
+    suspend fun revokeLicenseInDb(licenseId: Int, reason: String): Result<LicenseDbResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🚫 Revoking license: $licenseId")
+            val updateData = mapOf<String, Any?>(
+                "is_revoked" to true,
+                "revoked_at" to java.time.Instant.now().toString(),
+                "revoked_reason" to reason
+            )
+            val result = api.revokeLicense("eq.$licenseId", updateData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ License revoked successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to revoke license"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error revoking license: ${e.message}")
             Result.failure(e)
         }
     }

@@ -119,6 +119,9 @@ dependencies {
     // ==================== IMAGE LOADING ====================
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // ==================== CHARTS (Vico) ====================
+    implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-alpha.28")
+
     // ==================== SECURITY ====================
     implementation("org.mindrot:jbcrypt:0.4")
 

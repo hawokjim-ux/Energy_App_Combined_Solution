@@ -92,9 +92,9 @@ data class PumpResponse(
     @SerializedName("pump_name")
     val pumpName: String,
     @SerializedName("pump_type")
-    val pumpType: String,
+    val pumpType: String? = null,  // Nullable - may not exist in DB
     @SerializedName("is_active")
-    val isActive: Boolean
+    val isActive: Boolean = true
 )
 
 // ==================== Shift Models ====================
@@ -171,13 +171,13 @@ data class SaleResponse(
     @SerializedName("amount")
     val amount: Double,
     @SerializedName("customer_mobile_no")
-    val customerMobileNo: String,
+    val customerMobileNo: String? = null,
     @SerializedName("transaction_status")
-    val transactionStatus: String,
+    val transactionStatus: String = "PENDING",
     @SerializedName("mpesa_receipt_number")
-    val mpesaReceiptNumber: String?,
-    @SerializedName("sale_time")
-    val saleTime: String,
+    val mpesaReceiptNumber: String? = null,
+    @SerializedName("created_at")  // Changed from sale_time to match database
+    val saleTime: String = "",
     @SerializedName("checkout_request_id")
     val checkoutRequestId: String? = null
 )

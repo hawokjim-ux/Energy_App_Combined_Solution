@@ -5,13 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.energyapp.data.remote.SupabaseApiService
 import com.energyapp.data.remote.models.CloseShiftRequest
 import com.energyapp.data.remote.models.OpenShiftRequest
-import com.energyapp.data.remote.models.PumpResponse
-import com.energyapp.data.remote.models.ShiftResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.*
 import javax.inject.Inject
 
 data class Pump(
@@ -48,6 +46,9 @@ class ShiftManagementViewModel @Inject constructor(
 
     private var userId: Int = 0
 
+    // Date formatter compatible with API 24+
+    private val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+
     init {
         loadData()
     }
@@ -77,7 +78,7 @@ class ShiftManagementViewModel @Inject constructor(
                     )
                 }
 
-                // Load shifts
+                // Load shifts (now only Day and Night)
                 val shiftsResult = apiService.getShifts()
                 val shiftResponses = shiftsResult.getOrNull() ?: emptyList()
                 val shifts = shiftResponses.map { Shift(it.shiftId, it.shiftName) }
@@ -139,7 +140,8 @@ class ShiftManagementViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val currentTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                // Use API 24+ compatible date formatting
+                val currentTime = dateFormatter.format(Date())
 
                 val request = OpenShiftRequest(
                     pumpId = pump.pumpId,
@@ -187,7 +189,8 @@ class ShiftManagementViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val currentTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                // Use API 24+ compatible date formatting
+                val currentTime = dateFormatter.format(Date())
 
                 val request = CloseShiftRequest(
                     closingReading = reading,

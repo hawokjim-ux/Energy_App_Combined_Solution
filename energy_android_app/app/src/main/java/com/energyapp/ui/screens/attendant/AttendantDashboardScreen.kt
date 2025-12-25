@@ -1,14 +1,14 @@
 package com.energyapp.ui.screens.attendant
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
@@ -20,10 +20,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.energyapp.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.*
 
+/**
+ * Attendant Dashboard Screen - Super Modern 2024 Design
+ * Features: Glassmorphism, Vibrant Gradients, Modern Cards, Premium Feel
+ * 
+ * Pump Attendant sees: Record Sale, Current Shift, Profile ONLY
+ * NO access to: Sales data, Transaction counts, Reports
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AttendantDashboardScreen(
@@ -31,182 +43,239 @@ fun AttendantDashboardScreen(
     onNavigateToSales: () -> Unit,
     onLogout: () -> Unit
 ) {
+    val currentTime = remember { 
+        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()) 
+    }
+    val currentDate = remember { 
+        SimpleDateFormat("EEEE, dd MMM yyyy", Locale.getDefault()).format(Date()) 
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0F172A),
-                        Color(0xFF1E293B),
-                        Color(0xFF0F172A)
-                    )
-                )
-            )
+            .background(LightBackground)
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Attendant Dashboard",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp
+                // =============== STUNNING MESH GRADIENT HEADER ===============
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF06B6D4), // Cyan
+                                    Color(0xFF0EA5E9), // Sky Blue
+                                    Color(0xFF06D6A6)  // Teal
+                                )
+                            )
                         )
-                    },
-                    actions = {
-                        IconButton(onClick = onLogout) {
+                        .statusBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            // Avatar with gradient ring
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.2f))
+                                    .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "⛽",
+                                    fontSize = 24.sp
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Welcome, Pump Attendant",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                                Text(
+                                    text = fullName,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        
+                        // Glassmorphism Logout Button
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.2f))
+                                .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                                .clickable { onLogout() },
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
-                                imageVector = Icons.Rounded.ExitToApp,
+                                Icons.Rounded.ExitToApp,
                                 contentDescription = "Logout",
+                                tint = Color.White,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF1E293B).copy(alpha = 0.95f),
-                        titleContentColor = Color.White,
-                        actionIconContentColor = Color(0xFF06D6A6)
-                    ),
-                    modifier = Modifier.shadow(
-                        elevation = 8.dp,
-                        spotColor = Color(0xFF06D6A6).copy(alpha = 0.2f)
-                    )
-                )
+                    }
+                }
             },
-            containerColor = Color.Transparent,
-            contentColor = Color.White
+            containerColor = LightBackground
         ) { paddingValues ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Welcome Card
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn()
+                // =============== SHIFT STATUS CARD ===============
+                ModernAttendantShiftCard(
+                    currentDate = currentDate,
+                    currentTime = currentTime
+                )
+                
+                // =============== MAIN ACTION - RECORD SALE ===============
+                ModernRecordSaleCard(
+                    onClick = onNavigateToSales
+                )
+                
+                // =============== QUICK ACTION GRID ===============
+                Text(
+                    text = "Quick Actions",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurface,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    PremiumAttendantWelcomeCard(fullName = fullName)
+                    ModernAttendantActionCard(
+                        title = "My Shift",
+                        subtitle = "View details",
+                        icon = Icons.Rounded.Schedule,
+                        gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFFA855F7)),
+                        modifier = Modifier.weight(1f),
+                        onClick = { /* TODO: Navigate to shift details */ }
+                    )
+                    ModernAttendantActionCard(
+                        title = "Profile",
+                        subtitle = "My account",
+                        icon = Icons.Rounded.Person,
+                        gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFFBBF24)),
+                        modifier = Modifier.weight(1f),
+                        onClick = { /* TODO: Navigate to profile */ }
+                    )
                 }
-
-                // Quick Stats
-                QuickStatsRow()
-
-                // Main Dashboard Grid
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    item {
-                        PremiumActionCard(
-                            title = "Record Sale",
-                            subtitle = "Process transaction",
-                            icon = Icons.Rounded.PointOfSale,
-                            gradientColors = listOf(
-                                Color(0xFF06B6D4),
-                                Color(0xFF0EA5E9)
-                            ),
-                            badge = "Tap",
-                            onClick = onNavigateToSales
-                        )
-                    }
-
-                    item {
-                        PremiumActionCard(
-                            title = "My Sales",
-                            subtitle = "View transactions",
-                            icon = Icons.Rounded.Receipt,
-                            gradientColors = listOf(
-                                Color(0xFF0EA5E9),
-                                Color(0xFF06B6D4)
-                            ),
-                            badge = "View",
-                            onClick = { /* TODO */ }
-                        )
-                    }
-
-                    item {
-                        PremiumActionCard(
-                            title = "Current Shift",
-                            subtitle = "Shift details",
-                            icon = Icons.Rounded.Schedule,
-                            gradientColors = listOf(
-                                Color(0xFF06D6A6),
-                                Color(0xFF0EA5E9)
-                            ),
-                            badge = "Active",
-                            onClick = { /* TODO */ }
-                        )
-                    }
-
-                    item {
-                        PremiumActionCard(
-                            title = "Profile",
-                            subtitle = "Personal details",
-                            icon = Icons.Rounded.Person,
-                            gradientColors = listOf(
-                                Color(0xFF0EA5E9),
-                                Color(0xFF06D6A6)
-                            ),
-                            badge = "View",
-                            onClick = { /* TODO */ }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Quick Access Info Card
-                QuickAccessInfoCard()
+                
+                // =============== PUMP STATUS INFO CARD ===============
+                ModernPumpStatusCard()
+                
+                // =============== HELPFUL TIPS CARD ===============
+                ModernTipsCard()
+                
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
-
-        // Decorative background elements
-        AttendantDecorativeCircles()
     }
 }
 
+/**
+ * Modern Shift Status Card - Shows current shift info
+ */
 @Composable
-fun PremiumAttendantWelcomeCard(fullName: String) {
-    Box(
+fun ModernAttendantShiftCard(
+    currentDate: String,
+    currentTime: String
+) {
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF06D6A6).copy(alpha = 0.15f),
-                        Color(0xFF0EA5E9).copy(alpha = 0.1f)
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color(0xFF06B6D4).copy(alpha = 0.15f)
+            ),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF06B6D4).copy(alpha = 0.08f),
+                            Color(0xFF0EA5E9).copy(alpha = 0.05f)
+                        )
                     )
                 )
-            )
-            .border(
-                width = 1.5.dp,
-                color = Color(0xFF06D6A6).copy(alpha = 0.3f),
-                shape = RoundedCornerShape(24.dp)
-            )
-            .padding(24.dp)
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(20.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF22C55E))
+                        )
+                        Text(
+                            text = "Shift Active",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF22C55E)
+                        )
+                    }
+                    Text(
+                        text = currentDate,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary
+                    )
+                    Text(
+                        text = currentTime,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurface
+                    )
+                }
+                
+                // Shift icon
                 Box(
                     modifier = Modifier
-                        .size(50.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
                         .background(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF06D6A6),
+                                    Color(0xFF06B6D4),
                                     Color(0xFF0EA5E9)
                                 )
                             )
@@ -214,26 +283,10 @@ fun PremiumAttendantWelcomeCard(fullName: String) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Person,
+                        Icons.Rounded.AccessTime,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = "Welcome, Attendant",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFA1A5B7),
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = fullName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        fontSize = 20.sp
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             }
@@ -241,264 +294,307 @@ fun PremiumAttendantWelcomeCard(fullName: String) {
     }
 }
 
+/**
+ * Main Record Sale Card - Prominent, eye-catching
+ */
 @Composable
-fun QuickStatsRow() {
-    Row(
+fun ModernRecordSaleCard(
+    onClick: () -> Unit
+) {
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        QuickStatItem(
-            label = "Today Sales",
-            value = "KES 2,500",
-            icon = Icons.Rounded.TrendingUp,
-            color = Color(0xFF06D6A6),
-            modifier = Modifier.weight(1f)
-        )
-        QuickStatItem(
-            label = "Transactions",
-            value = "12",
-            icon = Icons.Rounded.SwapHoriz,
-            color = Color(0xFF0EA5E9),
-            modifier = Modifier.weight(1f)
-        )
-        QuickStatItem(
-            label = "Shift Status",
-            value = "Active",
-            icon = Icons.Rounded.RadioButtonChecked,
-            color = Color(0xFF06B6D4),
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-fun QuickStatItem(
-    label: String,
-    value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1E293B))
-            .border(
-                width = 1.5.dp,
-                color = color.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(16.dp)
+            .height(160.dp)
+            .shadow(
+                elevation = 20.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = Color(0xFF06D6A6).copy(alpha = 0.3f)
             )
-            .padding(12.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.Start
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF06D6A6),
+                            Color(0xFF0EA5E9),
+                            Color(0xFF06B6D4)
+                        )
+                    )
+                )
+                .padding(24.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = color,
-                modifier = Modifier.size(18.dp)
-            )
-
-            Column {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF94A3B8),
-                    fontSize = 10.sp
-                )
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Record Sale",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Tap to process M-Pesa payment",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White.copy(alpha = 0.2f))
+                            .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.PointOfSale,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "TAP TO START",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+                
+                // Large icon
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.2f))
+                        .border(2.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "⛽",
+                        fontSize = 40.sp
+                    )
+                }
             }
         }
     }
 }
 
+/**
+ * Modern Action Card for Quick Actions
+ */
 @Composable
-fun PremiumActionCard(
+fun ModernAttendantActionCard(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     gradientColors: List<Color>,
-    badge: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
-    Box(
+    Card(
         modifier = modifier
-            .fillMaxWidth()
-            .height(160.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                brush = Brush.linearGradient(colors = gradientColors)
-            )
+            .height(130.dp)
             .shadow(
-                elevation = 12.dp,
-                shape = RoundedCornerShape(20.dp),
-                ambientColor = gradientColors[0].copy(alpha = 0.3f)
+                elevation = 8.dp,
+                shape = RoundedCornerShape(18.dp),
+                spotColor = gradientColors[0].copy(alpha = 0.2f)
             )
-            .clickable { onClick() }
-            .padding(20.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp
-                    )
-                }
-
                 Box(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.2f)),
+                        .background(
+                            brush = Brush.linearGradient(colors = gradientColors)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = icon,
+                        icon,
                         contentDescription = title,
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
+                
+                Column {
+                    Text(
+                        text = title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurface
+                    )
+                    Text(
+                        text = subtitle,
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
             }
+        }
+    }
+}
 
+/**
+ * Modern Pump Status Card
+ */
+@Composable
+fun ModernPumpStatusCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(18.dp),
+                spotColor = Color(0xFF22C55E).copy(alpha = 0.1f)
+            ),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.2f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF22C55E).copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                    Icon(
+                        Icons.Rounded.LocalGasStation,
+                        contentDescription = null,
+                        tint = Color(0xFF22C55E),
+                        modifier = Modifier.size(26.dp)
                     )
                 }
-
-                Icon(
-                    imageVector = Icons.Rounded.ArrowForward,
-                    contentDescription = "Navigate",
-                    tint = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
+                Column {
+                    Text(
+                        text = "Pump Status",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurface
+                    )
+                    Text(
+                        text = "All pumps operational",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+            
+            Surface(
+                color = Color(0xFF22C55E).copy(alpha = 0.12f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "Online",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF22C55E)
                 )
             }
         }
     }
 }
 
+/**
+ * Modern Tips Card
+ */
 @Composable
-fun QuickAccessInfoCard() {
-    Box(
+fun ModernTipsCard() {
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1E293B))
-            .border(
-                width = 1.5.dp,
-                color = Color(0xFF06D6A6).copy(alpha = 0.2f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(18.dp),
+                spotColor = Color(0xFFF59E0B).copy(alpha = 0.1f)
+            ),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFF59E0B).copy(alpha = 0.05f),
+                            Color(0xFFFBBF24).copy(alpha = 0.02f)
+                        )
+                    )
+                )
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFF59E0B).copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Info,
+                    Icons.Rounded.Lightbulb,
                     contentDescription = null,
-                    tint = Color(0xFF06D6A6),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Pump Status",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color(0xFF06D6A6),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(22.dp)
                 )
             }
-
-            Text(
-                text = "All pumps operational. Your shift is active until 18:00. Ensure M-Pesa payments are confirmed before closing transactions.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFA1A5B7),
-                fontSize = 11.sp
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "Quick Tip",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFF59E0B)
+                )
+                Text(
+                    text = "Always verify M-Pesa payment confirmation before completing the transaction. Check customer's phone for the success message.",
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    lineHeight = 18.sp
+                )
+            }
         }
-    }
-}
-
-@Composable
-fun AttendantDecorativeCircles() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .size(400.dp)
-                .offset(x = -150.dp, y = -150.dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF06D6A6).copy(alpha = 0.1f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .size(400.dp)
-                .offset(x = 200.dp, y = 500.dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF0EA5E9).copy(alpha = 0.08f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
     }
 }

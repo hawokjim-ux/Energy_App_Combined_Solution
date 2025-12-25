@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.energyapp.data.remote.SupabaseApiService
 import com.energyapp.data.remote.MpesaBackendService
 import com.energyapp.data.remote.MpesaWebhookSupabaseService
-import com.energyapp.data.remote.models.CreateSaleRequest
 import com.energyapp.data.remote.MpesaStkRequest
 import com.energyapp.util.MpesaConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,7 +39,8 @@ data class SalesUiState(
     val successMessage: String? = null,
     val mpesaReceipt: String? = null,
     val checkoutRequestId: String? = null,
-    val validationError: String? = null
+    val validationError: String? = null,
+    val saleId: String? = null
 )
 
 /**
@@ -67,6 +67,7 @@ class SalesViewModel @Inject constructor(
 
     fun setUserId(id: Int) {
         userId = id
+        Log.d(TAG, "User ID set to: $userId")
     }
 
     private fun loadPumps() {
@@ -93,8 +94,11 @@ class SalesViewModel @Inject constructor(
                         pumps = pumps,
                         selectedPump = pumps.firstOrNull()
                     )
+
+                    Log.d(TAG, "✅ Loaded ${pumps.size} pumps with open shifts")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to load pumps: ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     error = "Failed to load pumps: ${e.message}"
                 )
@@ -102,10 +106,6 @@ class SalesViewModel @Inject constructor(
         }
     }
 
-    /**
-     * The `saleIdNo` is used for your internal Supabase records,
-     * where a long ID is safe and necessary for uniqueness.
-     */
     private fun generateSaleId() {
         val saleId = "SALE-${System.currentTimeMillis()}"
         _uiState.value = _uiState.value.copy(saleIdNo = saleId)
@@ -113,14 +113,15 @@ class SalesViewModel @Inject constructor(
 
     fun selectPump(pump: Pump) {
         _uiState.value = _uiState.value.copy(selectedPump = pump, error = null)
+        Log.d(TAG, "Pump selected: ${pump.pumpName}")
     }
 
     fun onAmountChange(amount: String) {
-        _uiState.value = _uiState.value.copy(amount = amount, validationError = null)
+        _uiState.value = _uiState.value.copy(amount = amount, validationError = null, error = null)
     }
 
     fun onCustomerMobileChange(mobile: String) {
-        _uiState.value = _uiState.value.copy(customerMobile = mobile, validationError = null)
+        _uiState.value = _uiState.value.copy(customerMobile = mobile, validationError = null, error = null)
     }
 
     fun clearForm() {
@@ -129,262 +130,377 @@ class SalesViewModel @Inject constructor(
             customerMobile = "",
             error = null,
             validationError = null,
+            successMessage = null,
+            mpesaReceipt = null,
+            checkoutRequestId = null,
             selectedPump = _uiState.value.pumps.firstOrNull()
         )
         generateSaleId()
+        Log.d(TAG, "Form cleared")
     }
 
     /**
-     * Validate all inputs before payment
+     * Validate all inputs before payment - IMPROVED VALIDATION
      */
     private fun validateInputs(): String? {
         val pump = _uiState.value.selectedPump
-        val amount = _uiState.value.amount.toDoubleOrNull()
+        val amountStr = _uiState.value.amount.trim()
         val mobile = _uiState.value.customerMobile.trim()
 
         return when {
             pump == null -> "No pump with open shift available"
-            amount == null || amount <= 0 -> "Please enter a valid amount (greater than 0)"
-            mobile.isEmpty() -> "Please enter customer mobile number"
-            // Assuming MpesaConfig.isValidKenyanPhone handles validation logic
-            !MpesaConfig.isValidKenyanPhone(mobile) -> "Invalid mobile format. Use 07XXXXXXXX or 2547XXXXXXXX"
             pump.currentShiftId == null -> "No active shift for selected pump"
+            amountStr.isEmpty() -> "Please enter an amount"
+            amountStr.toDoubleOrNull() == null -> "Please enter a valid amount"
+            amountStr.toDouble() <= 0 -> "Amount must be greater than 0"
+            amountStr.toDouble() > 150000 -> "Amount cannot exceed KES 150,000"
+            mobile.isEmpty() -> "Please enter customer mobile number"
+            !MpesaConfig.isValidKenyanPhone(mobile) -> {
+                "Invalid mobile format. Use 07XXXXXXXX or 254XXXXXXXXX"
+            }
             else -> null
         }
     }
 
     fun initiateMpesaPayment() {
+        Log.d(TAG, "🚀 Initiating M-Pesa payment...")
+
+        // Clear any previous messages
+        _uiState.value = _uiState.value.copy(
+            error = null,
+            validationError = null,
+            successMessage = null
+        )
+
+        // Validate inputs
         val validationError = validateInputs()
         if (validationError != null) {
+            Log.w(TAG, "⚠️ Validation failed: $validationError")
             _uiState.value = _uiState.value.copy(validationError = validationError)
             return
         }
 
         val pump = _uiState.value.selectedPump ?: return
-        val amount = _uiState.value.amount.toDoubleOrNull() ?: return
+        val amount = _uiState.value.amount.trim().toDoubleOrNull() ?: return
         val mobile = _uiState.value.customerMobile.trim()
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isProcessing = true, error = null)
+            // Set processing state IMMEDIATELY
+            _uiState.value = _uiState.value.copy(
+                isProcessing = true,
+                error = null,
+                validationError = null
+            )
 
             try {
                 val shiftId = pump.currentShiftId ?: 0
-                val saleRequest = CreateSaleRequest(
-                    saleIdNo = _uiState.value.saleIdNo,
-                    pumpShiftId = shiftId,
-                    pumpId = pump.pumpId,
-                    attendantId = userId,
-                    amount = amount,
-                    customerMobileNo = mobile,
-                    transactionStatus = "PENDING",
-                    checkoutRequestId = null
-                )
-
-                val saleResult = supabaseApiService.createSale(saleRequest)
-                if (saleResult.isFailure) {
-                    throw Exception("Failed to create sale: ${saleResult.exceptionOrNull()?.message}")
-                }
-
-                val sale = saleResult.getOrThrow()
-                val saleId = sale.saleId
-
                 val formattedPhone = MpesaConfig.formatPhoneNumber(mobile)
 
-                // *** FIX APPLIED HERE: Shorten Account Reference to max 4 chars for M-Pesa compliance ***
-                // Use "P" prefix + Pump ID. e.g., P1, P12, P123
+                Log.d(TAG, "📞 Formatted phone: $formattedPhone")
+                Log.d(TAG, "💰 Amount: KES $amount")
+                Log.d(TAG, "⛽ Pump: ${pump.pumpName} (ID: ${pump.pumpId})")
+                Log.d(TAG, "👤 User ID: $userId")
+
+                // Short account reference for M-Pesa compliance (max 12 chars)
                 val shortAccountReference = "P${pump.pumpId}".take(4)
 
+                // Call STK Push
+                Log.d(TAG, "📡 Calling STK Push API...")
                 val stkResponse = try {
                     mpesaBackendService.initiateStkPush(
                         MpesaStkRequest(
                             amount = amount,
                             phone = formattedPhone,
-                            // Use the short, compliant AccountReference for the M-Pesa API
                             account = shortAccountReference,
-                            description = "Fuel Payment - Pump ${pump.pumpName}"
+                            description = "Fuel - Pump ${pump.pumpName}",
+                            userId = userId.toString(),
+                            pumpId = pump.pumpId.toString(),
+                            shiftId = shiftId.toString()
                         )
                     )
                 } catch (e: Exception) {
-                    supabaseApiService.updateSaleTransactionStatus(saleId, "FAILED")
-                    throw Exception("Failed to reach M-Pesa service: ${e.message}")
+                    Log.e(TAG, "❌ Network error: ${e.message}")
+                    throw Exception("Failed to reach payment service: ${e.message}")
                 }
 
+                Log.d(TAG, "📥 STK Response received: success=${stkResponse.success}")
+
+                // Check if STK Push was successful
                 if (!stkResponse.success) {
-                    supabaseApiService.updateSaleTransactionStatus(saleId, "FAILED")
-                    throw Exception("M-Pesa rejected request: ${stkResponse.message}")
+                    Log.e(TAG, "❌ STK Push rejected: ${stkResponse.message}")
+                    throw Exception(stkResponse.message)
                 }
 
+                // CRITICAL: Validate CheckoutRequestID exists
                 val checkoutRequestID = stkResponse.checkoutRequestID
                 if (checkoutRequestID.isNullOrEmpty()) {
-                    supabaseApiService.updateSaleTransactionStatus(saleId, "FAILED")
-                    throw Exception("No checkout request ID received from M-Pesa")
+                    Log.e(TAG, "❌ FATAL: No CheckoutRequestID in response")
+                    throw Exception("Payment request incomplete - no checkout ID received. Please try again.")
                 }
 
-                Log.d(TAG, "💾 Saving M-Pesa response to mpesa-webhook project...")
-                val mpesaSaveResult = mpesaWebhookSupabaseService.saveStkPushResponse(
-                    checkoutRequestId = checkoutRequestID,
-                    merchantRequestId = stkResponse.merchantRequestID,
-                    amount = amount,
-                    phoneNumber = formattedPhone,
-                    // Use the original long unique ID for your internal Supabase records
-                    accountReference = _uiState.value.saleIdNo
-                )
+                val saleId = stkResponse.saleId
+                Log.d(TAG, "✅ STK Push successful!")
+                Log.d(TAG, "🎫 CheckoutRequestID: $checkoutRequestID")
+                Log.d(TAG, "🆔 Sale ID: $saleId")
 
-                if (mpesaSaveResult.isFailure) {
-                    Log.e(TAG, "⚠️ Warning: M-Pesa data not saved to webhook project")
-                } else {
-                    Log.d(TAG, "✅ M-Pesa data saved successfully!")
+                // Save to webhook project (non-blocking)
+                try {
+                    val mpesaSaveResult = mpesaWebhookSupabaseService.saveStkPushResponse(
+                        checkoutRequestId = checkoutRequestID,
+                        merchantRequestId = stkResponse.merchantRequestID,
+                        amount = amount,
+                        phoneNumber = formattedPhone,
+                        accountReference = _uiState.value.saleIdNo
+                    )
+
+                    if (mpesaSaveResult.isFailure) {
+                        Log.w(TAG, "⚠️ Warning: M-Pesa data not saved to webhook project")
+                    } else {
+                        Log.d(TAG, "✅ M-Pesa data saved to webhook project")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Webhook save error (non-critical): ${e.message}")
                 }
 
-                supabaseApiService.updateSaleTransactionStatus(
-                    saleId = saleId,
-                    status = "PENDING"
-                )
-
-                // ✅ DON'T SHOW SUCCESS YET - Keep processing = true
+                // Update UI to show "processing" with checkout ID
                 _uiState.value = _uiState.value.copy(
                     isProcessing = true,
-                    successMessage = null,
-                    checkoutRequestId = checkoutRequestID
+                    checkoutRequestId = checkoutRequestID,
+                    saleId = saleId,
+                    error = null
                 )
 
+                // Start polling for transaction status
                 pollTransactionStatus(checkoutRequestID, saleId)
 
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Payment initiation error: ${e.message}")
+                e.printStackTrace()
+
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    error = e.message ?: "Unknown error occurred"
+                    error = e.message ?: "Payment request failed. Please try again."
                 )
             }
         }
     }
 
     /**
-     * Poll for transaction status - ONLY show success when resultCode == 0
+     * Poll for transaction status - IMPROVED WITH BETTER LOGGING
      */
-    private fun pollTransactionStatus(checkoutRequestID: String, saleId: Int) {
+    private fun pollTransactionStatus(checkoutRequestID: String, saleId: String?) {
         viewModelScope.launch {
+            Log.d(TAG, "🔄 Starting status polling for: $checkoutRequestID")
+
             // Poll for about 2 minutes (24 attempts * 5 seconds)
             repeat(24) { attempt ->
-                delay(5000)
-                Log.d(TAG, "🔍 Polling status (attempt ${attempt + 1}/24)...")
+                delay(5000) // 5 second intervals
 
-                val statusResult = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
+                val attemptNum = attempt + 1
+                Log.d(TAG, "🔍 Polling attempt $attemptNum/24...")
 
-                if (statusResult.success) {
-                    // Handle result code
-                    when {
-                        statusResult.resultCode == null -> {
-                            // Still pending - continue polling
-                            Log.d(TAG, "⏳ Still pending, continuing to poll...")
-                        }
-                        statusResult.resultCode == 0 -> {
-                            // ✅ SUCCESS
-                            Log.d(TAG, "✅ Payment successful!")
+                try {
+                    val statusResult = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
 
-                            supabaseApiService.updateSaleTransactionStatus(
-                                saleId,
-                                "SUCCESS",
-                                statusResult.mpesaReceiptNumber
-                            )
+                    Log.d(TAG, "📊 Status: success=${statusResult.success}, resultCode=${statusResult.resultCode}")
 
-                            mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
-                                checkoutRequestId = checkoutRequestID,
-                                resultCode = 0,
-                                resultDesc = statusResult.resultDesc ?: "Success",
-                                mpesaReceiptNumber = statusResult.mpesaReceiptNumber,
-                                transactionDate = statusResult.transactionDate
-                            )
+                    if (statusResult.success) {
+                        when (statusResult.resultCode) {
+                            null -> {
+                                // Still pending
+                                Log.d(TAG, "⏳ Payment pending (attempt $attemptNum/24)")
+                            }
 
-                            _uiState.value = _uiState.value.copy(
-                                isProcessing = false,
-                                successMessage = "Payment Successful!",
-                                mpesaReceipt = statusResult.mpesaReceiptNumber,
-                                checkoutRequestId = checkoutRequestID,
-                                amount = "",
-                                customerMobile = ""
-                            )
-                            generateSaleId()
-                            return@launch
+                            0 -> {
+                                // ✅ SUCCESS
+                                Log.d(TAG, "✅ PAYMENT SUCCESSFUL!")
+                                Log.d(TAG, "💳 Receipt: ${statusResult.mpesaReceiptNumber}")
+
+                                // Update webhook project
+                                try {
+                                    mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
+                                        checkoutRequestId = checkoutRequestID,
+                                        resultCode = 0,
+                                        resultDesc = statusResult.resultDesc ?: "Success",
+                                        mpesaReceiptNumber = statusResult.mpesaReceiptNumber,
+                                        transactionDate = statusResult.transactionDate
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "⚠️ Webhook update failed: ${e.message}")
+                                }
+
+                                // Update main database
+                                saleId?.toIntOrNull()?.let { id ->
+                                    try {
+                                        supabaseApiService.updateSaleTransactionStatus(
+                                            id,
+                                            "SUCCESS",
+                                            statusResult.mpesaReceiptNumber
+                                        )
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
+                                    }
+                                }
+
+                                _uiState.value = _uiState.value.copy(
+                                    isProcessing = false,
+                                    successMessage = "Payment Successful! Receipt: ${statusResult.mpesaReceiptNumber}",
+                                    mpesaReceipt = statusResult.mpesaReceiptNumber,
+                                    error = null,
+                                    amount = "",
+                                    customerMobile = ""
+                                )
+                                generateSaleId()
+                                return@launch
+                            }
+
+                            1032 -> {
+                                // ❌ CANCELLED
+                                Log.d(TAG, "❌ Payment cancelled by user")
+
+                                try {
+                                    mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
+                                        checkoutRequestId = checkoutRequestID,
+                                        resultCode = 1032,
+                                        resultDesc = "Cancelled by user",
+                                        mpesaReceiptNumber = null,
+                                        transactionDate = null
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "⚠️ Webhook update failed: ${e.message}")
+                                }
+
+                                saleId?.toIntOrNull()?.let { id ->
+                                    try {
+                                        supabaseApiService.updateSaleTransactionStatus(id, "CANCELLED")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
+                                    }
+                                }
+
+                                _uiState.value = _uiState.value.copy(
+                                    isProcessing = false,
+                                    error = "Payment was cancelled by user"
+                                )
+                                return@launch
+                            }
+
+                            1 -> {
+                                // ❌ INSUFFICIENT FUNDS
+                                Log.d(TAG, "❌ Insufficient funds")
+
+                                try {
+                                    mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
+                                        checkoutRequestId = checkoutRequestID,
+                                        resultCode = 1,
+                                        resultDesc = "Insufficient funds",
+                                        mpesaReceiptNumber = null,
+                                        transactionDate = null
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "⚠️ Webhook update failed: ${e.message}")
+                                }
+
+                                saleId?.toIntOrNull()?.let { id ->
+                                    try {
+                                        supabaseApiService.updateSaleTransactionStatus(id, "FAILED")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
+                                    }
+                                }
+
+                                _uiState.value = _uiState.value.copy(
+                                    isProcessing = false,
+                                    error = "Insufficient funds in M-Pesa account"
+                                )
+                                return@launch
+                            }
+
+                            1037 -> {
+                                // ⏱️ TIMEOUT
+                                Log.d(TAG, "⏱️ Transaction timeout")
+
+                                try {
+                                    mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
+                                        checkoutRequestId = checkoutRequestID,
+                                        resultCode = 1037,
+                                        resultDesc = "Transaction timeout",
+                                        mpesaReceiptNumber = null,
+                                        transactionDate = null
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "⚠️ Webhook update failed: ${e.message}")
+                                }
+
+                                saleId?.toIntOrNull()?.let { id ->
+                                    try {
+                                        supabaseApiService.updateSaleTransactionStatus(id, "TIMEOUT")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
+                                    }
+                                }
+
+                                _uiState.value = _uiState.value.copy(
+                                    isProcessing = false,
+                                    error = "Payment request timed out"
+                                )
+                                return@launch
+                            }
+
+                            else -> {
+                                // ❌ OTHER ERROR
+                                Log.d(TAG, "❌ Payment failed: ${statusResult.resultDesc}")
+
+                                try {
+                                    mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
+                                        checkoutRequestId = checkoutRequestID,
+                                        resultCode = statusResult.resultCode ?: -1,
+                                        resultDesc = statusResult.resultDesc ?: "Failed",
+                                        mpesaReceiptNumber = null,
+                                        transactionDate = null
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "⚠️ Webhook update failed: ${e.message}")
+                                }
+
+                                saleId?.toIntOrNull()?.let { id ->
+                                    try {
+                                        supabaseApiService.updateSaleTransactionStatus(id, "FAILED")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
+                                    }
+                                }
+
+                                _uiState.value = _uiState.value.copy(
+                                    isProcessing = false,
+                                    error = "Payment failed: ${statusResult.resultDesc}"
+                                )
+                                return@launch
+                            }
                         }
-                        statusResult.resultCode == 1032 -> {
-                            // CANCELLED
-                            Log.d(TAG, "❌ User cancelled")
-                            supabaseApiService.updateSaleTransactionStatus(saleId, "CANCELLED")
-                            mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
-                                checkoutRequestId = checkoutRequestID,
-                                resultCode = 1032,
-                                resultDesc = "Cancelled by user",
-                                mpesaReceiptNumber = null,
-                                transactionDate = null
-                            )
-                            _uiState.value = _uiState.value.copy(
-                                isProcessing = false,
-                                error = "Payment cancelled by user"
-                            )
-                            return@launch
-                        }
-                        statusResult.resultCode == 1 -> {
-                            // INSUFFICIENT FUNDS
-                            Log.d(TAG, "❌ Insufficient funds")
-                            supabaseApiService.updateSaleTransactionStatus(saleId, "FAILED")
-                            mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
-                                checkoutRequestId = checkoutRequestID,
-                                resultCode = 1,
-                                resultDesc = "Insufficient funds",
-                                mpesaReceiptNumber = null,
-                                transactionDate = null
-                            )
-                            _uiState.value = _uiState.value.copy(
-                                isProcessing = false,
-                                error = "Insufficient funds in M-Pesa account"
-                            )
-                            return@launch
-                        }
-                        statusResult.resultCode == 1037 -> {
-                            // TIMEOUT
-                            Log.d(TAG, "⏱️ Transaction timeout")
-                            supabaseApiService.updateSaleTransactionStatus(saleId, "TIMEOUT")
-                            mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
-                                checkoutRequestId = checkoutRequestID,
-                                resultCode = 1037,
-                                resultDesc = "Transaction timeout",
-                                mpesaReceiptNumber = null,
-                                transactionDate = null
-                            )
-                            _uiState.value = _uiState.value.copy(
-                                isProcessing = false,
-                                error = "Payment timeout"
-                            )
-                            return@launch
-                        }
-                        else -> {
-                            // Other error
-                            Log.d(TAG, "❌ Transaction failed: ${statusResult.resultDesc}")
-                            supabaseApiService.updateSaleTransactionStatus(saleId, "FAILED")
-                            mpesaWebhookSupabaseService.updateTransactionWithWebhookResponse(
-                                checkoutRequestId = checkoutRequestID,
-                                resultCode = statusResult.resultCode ?: -1,
-                                resultDesc = statusResult.resultDesc ?: "Failed",
-                                mpesaReceiptNumber = null,
-                                transactionDate = null
-                            )
-                            _uiState.value = _uiState.value.copy(
-                                isProcessing = false,
-                                error = "Payment failed: ${statusResult.resultDesc}"
-                            )
-                            return@launch
-                        }
+                    } else {
+                        Log.w(TAG, "⚠️ Status check returned success=false")
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Status check error (attempt $attemptNum): ${e.message}")
+                    // Continue polling even if one check fails
                 }
             }
 
-            // Polling timeout
-            Log.d(TAG, "⏱️ Polling timeout")
-            supabaseApiService.updateSaleTransactionStatus(saleId, "TIMEOUT")
+            // Polling timeout after 24 attempts
+            Log.d(TAG, "⏰ Polling timeout after 24 attempts")
+
+            saleId?.toIntOrNull()?.let { id ->
+                try {
+                    supabaseApiService.updateSaleTransactionStatus(id, "TIMEOUT")
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Sale timeout update failed: ${e.message}")
+                }
+            }
+
             _uiState.value = _uiState.value.copy(
                 isProcessing = false,
-                error = "Payment confirmation timeout"
+                error = "Payment confirmation timeout. Please check M-Pesa messages."
             )
         }
     }
@@ -394,7 +510,6 @@ class SalesViewModel @Inject constructor(
             error = null,
             successMessage = null,
             mpesaReceipt = null,
-            checkoutRequestId = null,
             validationError = null
         )
     }

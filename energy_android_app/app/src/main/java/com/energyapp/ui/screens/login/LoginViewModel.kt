@@ -19,8 +19,108 @@ data class LoginUiState(
     val error: String? = null,
     val isSuccess: Boolean = false,
     val user: UserResponse? = null,
-    val isPasswordVisible: Boolean = false
+    val isPasswordVisible: Boolean = false,
+    val userPermissions: Set<String> = emptySet()
 )
+
+/**
+ * Role-based permission definitions
+ * These match the roles defined in UserRolesViewModel
+ */
+object RolePermissions {
+    // Super Admin - Full access (roleId = 1)
+    val SUPER_ADMIN = setOf(
+        "view_dashboard", "view_dashboard_stats",
+        "make_sale", "view_sales", "cancel_sale", "refund_sale",
+        "view_reports", "export_reports", "view_analytics",
+        "view_users", "create_user", "edit_user", "delete_user", "manage_attendants", "manage_login",
+        "view_pumps", "create_pump", "edit_pump", "delete_pump",
+        "view_shifts", "open_shift", "close_shift", "manage_shift_definitions",
+        "view_settings", "manage_roles", "system_config",
+        "view_transactions", "edit_transaction"
+    )
+
+    // Director - View-only (roleId = 2) - corresponding to old "Admin" role
+    val DIRECTOR = setOf(
+        "view_dashboard", "view_dashboard_stats",
+        "view_sales", "view_reports", "export_reports", "view_analytics",
+        "view_users", "view_pumps", "view_shifts",
+        "view_settings", "view_transactions"
+    )
+
+    // Manager - Full operations (roleId = 3)
+    val MANAGER = setOf(
+        "view_dashboard", "view_dashboard_stats",
+        "make_sale", "view_sales", "cancel_sale",
+        "view_reports", "view_analytics",
+        "view_users", "create_user", "edit_user", "manage_attendants",
+        "view_pumps", "create_pump", "edit_pump",
+        "view_shifts", "open_shift", "close_shift", "manage_shift_definitions",
+        "view_transactions"
+    )
+
+    // Supervisor - Oversight (roleId = 4)
+    val SUPERVISOR = setOf(
+        "view_dashboard", "view_dashboard_stats",
+        "make_sale", "view_sales",
+        "view_reports",
+        "view_users", "manage_attendants",
+        "view_pumps",
+        "view_shifts", "open_shift", "close_shift",
+        "view_transactions"
+    )
+
+    // Pump Attendant - Sales only (roleId = 5) - corresponding to old "Pump Attendant" role
+    val PUMP_ATTENDANT = setOf(
+        "make_sale", "view_sales"
+    )
+
+    /**
+     * Get permissions for a role name or role ID
+     */
+    fun getPermissionsForRole(roleName: String?, roleId: Int = 0): Set<String> {
+        // First try by role name
+        return when (roleName?.lowercase()?.trim()) {
+            "super admin", "superadmin" -> SUPER_ADMIN
+            "director" -> DIRECTOR
+            "admin" -> SUPER_ADMIN // Map old "Admin" to Super Admin
+            "manager" -> MANAGER
+            "supervisor" -> SUPERVISOR
+            "pump attendant", "attendant" -> PUMP_ATTENDANT
+            else -> {
+                // Fallback to roleId - MUST MATCH DATABASE user_roles table!
+                // role_id=1: Admin, role_id=2: Pump Attendant, role_id=5: Super Admin
+                when (roleId) {
+                    1 -> SUPER_ADMIN  // Admin has full access
+                    2 -> PUMP_ATTENDANT  // Pump Attendant
+                    3 -> MANAGER
+                    4 -> SUPERVISOR
+                    5 -> SUPER_ADMIN  // Super Admin
+                    else -> PUMP_ATTENDANT // Default to minimal permissions
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if role can view dashboard
+     */
+    fun canViewDashboard(roleName: String?): Boolean {
+        val permissions = getPermissionsForRole(roleName)
+        return permissions.contains("view_dashboard")
+    }
+
+    /**
+     * Get dashboard route based on role
+     */
+    fun getDashboardRoute(roleName: String?): String {
+        return if (canViewDashboard(roleName)) {
+            "admin_dashboard"  // Admin dashboard route
+        } else {
+            "attendant_dashboard"  // Attendant dashboard (sales only)
+        }
+    }
+}
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -83,7 +183,6 @@ class LoginViewModel @Inject constructor(
             )
 
             try {
-                // Add logging to see what's happening
                 println("🔐 DEBUG: Starting login for username: $username")
                 
                 val result = apiService.login(username, password)
@@ -97,20 +196,30 @@ class LoginViewModel @Inject constructor(
                 if (result.isSuccess) {
                     val user = result.getOrThrow()
                     
-                    println("✅ DEBUG: Login successful - User: ${user.fullName}, Role: ${user.roleName}")
+                    // Get permissions based on role
+                    val permissions = RolePermissions.getPermissionsForRole(
+                        roleName = user.roleName,
+                        roleId = user.roleId
+                    )
                     
-                    // Save user session to preferences
+                    println("✅ DEBUG: Login successful - User: ${user.fullName}, Role: ${user.roleName}")
+                    println("🔐 DEBUG: Assigned ${permissions.size} permissions for role: ${user.roleName}")
+                    
+                    // Save user session with permissions
                     preferencesManager.saveUserSession(
                         userId = user.userId,
                         username = user.username,
                         fullName = user.fullName,
-                        roleName = user.roleName ?: "Unknown"
+                        roleName = user.roleName ?: "Unknown",
+                        roleId = user.roleId,
+                        permissions = permissions
                     )
                     
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isSuccess = true,
                         user = user,
+                        userPermissions = permissions,
                         username = "",
                         password = ""
                     )
