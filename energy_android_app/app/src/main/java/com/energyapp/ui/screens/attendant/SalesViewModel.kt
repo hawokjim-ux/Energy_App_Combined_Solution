@@ -412,9 +412,33 @@ class SalesViewModel @Inject constructor(
                 Log.e(TAG, "❌ Payment initiation error: ${e.message}")
                 e.printStackTrace()
 
+                // Handle "Similar Transaction" error gracefully
+                val errorMessage = e.message ?: "Payment request failed. Please try again."
+                val userFriendlyError = when {
+                    errorMessage.contains("similar", ignoreCase = true) ||
+                    errorMessage.contains("duplicate", ignoreCase = true) ||
+                    errorMessage.contains("already", ignoreCase = true) -> {
+                        "⚠️ Similar transaction detected!\n\n" +
+                        "This happens when the same amount is sent to the same number within 2 minutes.\n\n" +
+                        "Solutions:\n" +
+                        "1️⃣ Wait 2 minutes and try again\n" +
+                        "2️⃣ Add KES 1 to the amount (e.g., 1001 instead of 1000)\n" +
+                        "3️⃣ Use Cash payment instead"
+                    }
+                    errorMessage.contains("timeout", ignoreCase = true) ||
+                    errorMessage.contains("timed out", ignoreCase = true) -> {
+                        "⏱️ Request timed out. Please check your internet connection and try again."
+                    }
+                    errorMessage.contains("network", ignoreCase = true) ||
+                    errorMessage.contains("connection", ignoreCase = true) -> {
+                        "📶 Network error. Please check your internet connection and try again."
+                    }
+                    else -> errorMessage
+                }
+
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    error = e.message ?: "Payment request failed. Please try again."
+                    error = userFriendlyError
                 )
             }
         }
