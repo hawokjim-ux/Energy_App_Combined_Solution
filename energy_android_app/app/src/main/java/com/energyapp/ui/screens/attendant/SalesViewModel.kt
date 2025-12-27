@@ -18,7 +18,7 @@ import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 /**
- * Data class representing a fuel pump with fuel type info
+ * Data class representing a fuel pump with fuel type, shift, and attendant info
  */
 data class Pump(
     val pumpId: Int,
@@ -26,7 +26,10 @@ data class Pump(
     val currentShiftId: Int?,
     val fuelTypeId: Int? = null,
     val pricePerLiter: Double = 0.0,
-    val fuelTypeName: String = ""
+    val fuelTypeName: String = "",
+    val shiftName: String = "",          // Shift name (Morning, Evening, Night)
+    val attendantId: Int? = null,        // Attendant assigned to this pump
+    val attendantName: String = ""       // Attendant name for display
 )
 
 /**
@@ -38,6 +41,7 @@ enum class PaymentMethod {
 
 /**
  * UI State for Sales Screen - Modern Compact Design
+ * Now includes logged-in user info and shift details
  */
 data class SalesUiState(
     val pumps: List<Pump> = emptyList(),
@@ -58,7 +62,11 @@ data class SalesUiState(
     val saleId: String? = null,
     val pollingAttempt: Int = 0,
     val maxPollingAttempts: Int = 20,
-    val salesCount: Int = 0  // For receipt number generation
+    val salesCount: Int = 0,
+    // User and Shift info for display
+    val loggedInUserName: String = "",   // Logged-in user's full name
+    val loggedInUserId: Int = 0,         // Logged-in user's ID
+    val currentShiftName: String = ""    // Current shift name (from selected pump)
 )
 
 /**
@@ -86,17 +94,35 @@ class SalesViewModel @Inject constructor(
     fun setUserId(id: Int) {
         userId = id
         Log.d(TAG, "User ID set to: $userId")
+        // Reload data when user is set to get proper user info
+        loadData()
     }
 
     /**
-     * Load pumps and fuel types together
+     * Set user info directly (from login)
+     */
+    fun setUserInfo(id: Int, name: String) {
+        userId = id
+        _uiState.value = _uiState.value.copy(
+            loggedInUserId = id,
+            loggedInUserName = name
+        )
+        Log.d(TAG, "User info set: $name (ID: $id)")
+        loadData()
+    }
+
+    /**
+     * Load pumps, fuel types, shifts, and user info together
      */
     private fun loadData() {
         viewModelScope.launch {
             try {
-                // Load fuel types first
+                // Load all data in parallel
                 val fuelTypesResult = supabaseApiService.getFuelTypes()
                 val fuelTypes = fuelTypesResult.getOrNull() ?: emptyList()
+                
+                val shiftsResult = supabaseApiService.getShifts()
+                val shifts = shiftsResult.getOrNull() ?: emptyList()
                 
                 // Load pumps
                 val pumpsResult = supabaseApiService.getPumps()
@@ -105,18 +131,26 @@ class SalesViewModel @Inject constructor(
                     val openShiftsResult = supabaseApiService.getOpenShifts()
                     val openShifts = openShiftsResult.getOrNull() ?: emptyList()
 
+                    // Build pump list with full info
                     val pumps = pumpResponses.mapNotNull { pumpResponse ->
+                        // Find open shift for this pump
                         val openShift = openShifts.find { it.pumpId == pumpResponse.pumpId && !it.isClosed }
                         if (openShift != null) {
-                            // Get fuel type info for this pump
+                            // Get fuel type info
                             val fuelType = fuelTypes.find { it.fuelTypeId == pumpResponse.fuelTypeId }
+                            // Get shift definition name
+                            val shiftDef = shifts.find { it.shiftId == openShift.shiftId }
+                            
                             Pump(
                                 pumpId = pumpResponse.pumpId,
                                 pumpName = pumpResponse.pumpName,
                                 currentShiftId = openShift.pumpShiftId,
                                 fuelTypeId = pumpResponse.fuelTypeId,
                                 pricePerLiter = fuelType?.pricePerLiter ?: 0.0,
-                                fuelTypeName = fuelType?.fuelName ?: ""
+                                fuelTypeName = fuelType?.fuelName ?: "",
+                                shiftName = shiftDef?.shiftName ?: "Shift",
+                                attendantId = openShift.attendantId,
+                                attendantName = "" // Will be set from logged-in user
                             )
                         } else null
                     }
@@ -125,17 +159,22 @@ class SalesViewModel @Inject constructor(
                     val salesResult = supabaseApiService.getAllSales()
                     val salesCount = salesResult.getOrNull()?.size ?: 0
 
+                    // Get current shift name from first pump (or selected)
+                    val currentShift = pumps.firstOrNull()?.shiftName ?: ""
+
                     _uiState.value = _uiState.value.copy(
                         pumps = pumps,
                         selectedPump = pumps.firstOrNull(),
                         fuelTypes = fuelTypes,
                         pricePerLiter = pumps.firstOrNull()?.pricePerLiter ?: fuelTypes.firstOrNull()?.pricePerLiter ?: 0.0,
-                        salesCount = salesCount
+                        salesCount = salesCount,
+                        currentShiftName = currentShift
                     )
                     
                     generateReceiptNumber(salesCount)
 
-                    Log.d(TAG, "✅ Loaded ${pumps.size} pumps, ${fuelTypes.size} fuel types")
+                    Log.d(TAG, "✅ Loaded ${pumps.size} pumps, ${fuelTypes.size} fuel types, ${shifts.size} shifts")
+                    Log.d(TAG, "✅ Current shift: $currentShift, User: ${_uiState.value.loggedInUserName}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to load data: ${e.message}")
@@ -163,11 +202,12 @@ class SalesViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             selectedPump = pump, 
             pricePerLiter = pump.pricePerLiter,
+            currentShiftName = pump.shiftName,
             error = null
         )
         // Recalculate liters with new price
         calculateLiters(_uiState.value.amount)
-        Log.d(TAG, "Pump selected: ${pump.pumpName}, Price: ${pump.pricePerLiter}/L")
+        Log.d(TAG, "Pump selected: ${pump.pumpName}, Shift: ${pump.shiftName}, Price: ${pump.pricePerLiter}/L")
     }
 
     fun onAmountChange(amount: String) {

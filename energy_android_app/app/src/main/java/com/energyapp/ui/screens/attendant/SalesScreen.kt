@@ -33,14 +33,14 @@ import com.energyapp.ui.components.LoadingDialog
 import com.energyapp.ui.theme.*
 
 /**
- * Sales Screen - Super Modern Compact 2024 Design
+ * Sales Screen - Modern Light Professional 2024 Design
  * Features:
+ * - LIGHT gradient colors matching main screen
  * - Cash + M-Pesa payment options
  * - Auto-calculate liters from amount
  * - Receipt number like web app (RCP-XXXXX)
- * - Compact layout - no scrolling needed
- * - Faster STK Push polling
- * - Light theme with vibrant gradients
+ * - Keyboard-aware scrolling (imePadding)
+ * - User and Shift info display
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,27 +53,39 @@ fun SalesScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LightBackground)
+            .background(Color(0xFFF8FAFC)) // Light gray background
+            .imePadding() // Handle keyboard
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Compact Gradient Header
-            CompactHeader(
+            // LIGHT Gradient Header
+            LightHeader(
                 receiptNumber = uiState.receiptNumber,
+                userName = uiState.loggedInUserName,
+                shiftName = uiState.currentShiftName,
                 onNavigateBack = onNavigateBack
             )
 
-            // Main Content - Single scrollable column
+            // Main Content - Keyboard-aware scrollable column
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Pump Selection - Horizontal chips
-                PumpSelectionRow(
+                // User & Shift Info Card
+                if (uiState.loggedInUserName.isNotEmpty() || uiState.currentShiftName.isNotEmpty()) {
+                    AttendantInfoCard(
+                        userName = uiState.loggedInUserName,
+                        shiftName = uiState.currentShiftName,
+                        pumpName = uiState.selectedPump?.pumpName ?: ""
+                    )
+                }
+
+                // Pump Selection
+                PumpSelectorCard(
                     pumps = uiState.pumps,
                     selectedPump = uiState.selectedPump,
                     onPumpSelect = viewModel::selectPump
@@ -82,26 +94,30 @@ fun SalesScreen(
                 if (uiState.pumps.isEmpty()) {
                     NoPumpsWarning()
                 } else {
-                    // Amount & Liters Card - Side by side
-                    AmountLitersCard(
+                    // Fuel Info
+                    FuelInfoBanner(
+                        fuelTypeName = uiState.selectedPump?.fuelTypeName ?: "",
+                        pricePerLiter = uiState.pricePerLiter
+                    )
+
+                    // Amount & Liters
+                    AmountLitersSection(
                         amount = uiState.amount,
                         onAmountChange = viewModel::onAmountChange,
                         litersSold = uiState.litersSold,
-                        pricePerLiter = uiState.pricePerLiter,
-                        fuelTypeName = uiState.selectedPump?.fuelTypeName ?: "",
                         enabled = !uiState.isProcessing
                     )
 
-                    // Payment Method Selection
-                    PaymentMethodSelector(
+                    // Payment Method
+                    PaymentMethodSection(
                         selectedMethod = uiState.paymentMethod,
                         onMethodSelect = viewModel::setPaymentMethod,
                         enabled = !uiState.isProcessing
                     )
 
-                    // Phone Number (only for M-Pesa)
+                    // Phone Number (M-Pesa only)
                     if (uiState.paymentMethod == PaymentMethod.MPESA) {
-                        PhoneNumberInput(
+                        PhoneInputCard(
                             mobile = uiState.customerMobile,
                             onMobileChange = viewModel::onCustomerMobileChange,
                             enabled = !uiState.isProcessing
@@ -109,12 +125,12 @@ fun SalesScreen(
                     }
 
                     // Validation Error
-                    if (uiState.validationError != null) {
-                        ValidationErrorCard(uiState.validationError!!)
+                    uiState.validationError?.let { error ->
+                        ErrorBanner(error)
                     }
 
-                    // Main Action Button
-                    MainPaymentButton(
+                    // Main Payment Button
+                    PaymentActionButton(
                         isProcessing = uiState.isProcessing,
                         isEnabled = !uiState.isProcessing && uiState.pumps.isNotEmpty(),
                         paymentMethod = uiState.paymentMethod,
@@ -123,38 +139,39 @@ fun SalesScreen(
                         onClick = viewModel::processPayment
                     )
 
-                    // Quick Actions Row
-                    QuickActionsRow(
+                    // Quick Actions
+                    QuickActionsBar(
                         onClear = viewModel::clearForm,
                         onRefresh = viewModel::refresh
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Extra space for keyboard
+                Spacer(modifier = Modifier.height(100.dp))
             }
         }
     }
 
     // Processing Dialog
     if (uiState.isProcessing && uiState.paymentMethod == PaymentMethod.MPESA) {
-        ProcessingDialog(
+        MpesaProcessingDialog(
             pollingAttempt = uiState.pollingAttempt,
             maxAttempts = uiState.maxPollingAttempts
         )
     }
 
     // Error Dialog
-    if (uiState.error != null) {
+    uiState.error?.let { error ->
         ErrorDialog(
-            message = uiState.error!!,
+            message = error,
             onDismiss = viewModel::clearMessages
         )
     }
 
     // Success Dialog
-    if (uiState.successMessage != null) {
-        PaymentSuccessDialog(
-            message = uiState.successMessage!!,
+    uiState.successMessage?.let { message ->
+        SuccessDialog(
+            message = message,
             receipt = uiState.mpesaReceipt,
             receiptNumber = uiState.receiptNumber,
             paymentMethod = uiState.paymentMethod,
@@ -166,11 +183,13 @@ fun SalesScreen(
     }
 }
 
-// ==================== COMPACT HEADER ====================
+// ==================== LIGHT HEADER ====================
 
 @Composable
-fun CompactHeader(
+fun LightHeader(
     receiptNumber: String,
+    userName: String = "",
+    shiftName: String = "",
     onNavigateBack: () -> Unit
 ) {
     Box(
@@ -179,14 +198,14 @@ fun CompactHeader(
             .background(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
-                        Color(0xFF7C3AED), // Purple
-                        Color(0xFF06B6D4), // Cyan
-                        Color(0xFFEC4899)  // Pink
+                        Color(0xFFE0F2FE), // Light blue
+                        Color(0xFFE0F7FA), // Light cyan
+                        Color(0xFFF0FDF4)  // Light green
                     )
                 )
             )
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -195,21 +214,22 @@ fun CompactHeader(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Back Button
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                         .clickable { onNavigateBack() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Rounded.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color.White,
+                        tint = Color(0xFF475569),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -217,14 +237,120 @@ fun CompactHeader(
                     Text(
                         "⛽ Record Sale",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = Color.White
+                        fontSize = 20.sp,
+                        color = Color(0xFF1E293B)
                     )
                     Text(
                         "📝 $receiptNumber",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B),
                         fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            // Right side: User & Shift
+            if (userName.isNotEmpty() || shiftName.isNotEmpty()) {
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    if (userName.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("👤", fontSize = 12.sp)
+                            Text(
+                                userName,
+                                fontSize = 12.sp,
+                                color = Color(0xFF334155),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    if (shiftName.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("🕐", fontSize = 10.sp)
+                            Text(
+                                shiftName,
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==================== ATTENDANT INFO CARD ====================
+
+@Composable
+fun AttendantInfoCard(
+    userName: String,
+    shiftName: String,
+    pumpName: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(Color(0xFF10B981).copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("👤", fontSize = 20.sp)
+                }
+                Column {
+                    Text(
+                        text = if (userName.isNotEmpty()) userName else "Attendant",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B)
+                    )
+                    if (pumpName.isNotEmpty()) {
+                        Text(
+                            text = "📍 $pumpName",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            }
+            
+            if (shiftName.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .background(
+                            color = Color(0xFF0EA5E9).copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "🕐 $shiftName",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0284C7)
                     )
                 }
             }
@@ -232,46 +358,39 @@ fun CompactHeader(
     }
 }
 
-// ==================== PUMP SELECTION ====================
+// ==================== PUMP SELECTOR ====================
 
 @Composable
-fun PumpSelectionRow(
+fun PumpSelectorCard(
     pumps: List<Pump>,
     selectedPump: Pump?,
     onPumpSelect: (Pump) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(14.dp)),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text("⛽", fontSize = 16.sp)
-                Text(
-                    "Select Pump",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = OnSurface
-                )
-            }
+            Text(
+                "⛽ Select Pump",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF334155)
+            )
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 pumps.forEach { pump ->
-                    PumpChip(
+                    PumpChipModern(
                         pump = pump,
                         isSelected = selectedPump?.pumpId == pump.pumpId,
                         onClick = { onPumpSelect(pump) }
@@ -283,53 +402,55 @@ fun PumpSelectionRow(
 }
 
 @Composable
-fun PumpChip(
+fun PumpChipModern(
     pump: Pump,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelected) {
                     Modifier.background(
                         brush = Brush.horizontalGradient(
-                            listOf(Color(0xFF06B6D4), Color(0xFF14B8A6))
+                            listOf(Color(0xFF10B981), Color(0xFF059669))
                         )
                     )
                 } else {
                     Modifier
-                        .background(Color(0xFFF1F5F9))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF8FAFC))
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                 }
             )
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.LocalGasStation,
-                    contentDescription = null,
-                    tint = if (isSelected) Color.White else TextSecondary,
-                    modifier = Modifier.size(14.dp)
-                )
+                if (isSelected) {
+                    Icon(
+                        Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
                 Text(
                     text = pump.pumpName,
-                    color = if (isSelected) Color.White else OnSurface,
-                    fontSize = 12.sp,
+                    color = if (isSelected) Color.White else Color(0xFF334155),
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
             if (pump.fuelTypeName.isNotEmpty()) {
                 Text(
                     text = pump.fuelTypeName,
-                    color = if (isSelected) Color.White.copy(alpha = 0.8f) else TextSecondary,
-                    fontSize = 10.sp
+                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color(0xFF64748B),
+                    fontSize = 11.sp
                 )
             }
         }
@@ -341,173 +462,184 @@ fun NoPumpsWarning() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2))
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("⚠️", fontSize = 20.sp)
+            Text("⚠️", fontSize = 22.sp)
             Text(
                 text = "No pumps available. Ask admin to open a shift.",
-                color = Error,
+                color = Color(0xFFDC2626),
                 fontWeight = FontWeight.Medium,
-                fontSize = 13.sp
+                fontSize = 14.sp
             )
         }
     }
 }
 
-// ==================== AMOUNT & LITERS CARD ====================
+// ==================== FUEL INFO ====================
 
 @Composable
-fun AmountLitersCard(
+fun FuelInfoBanner(
+    fuelTypeName: String,
+    pricePerLiter: Double
+) {
+    if (pricePerLiter > 0) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = Color(0xFFECFDF5),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "💰 ${if (fuelTypeName.isNotEmpty()) fuelTypeName else "Fuel"} @ KES ${String.format("%.2f", pricePerLiter)}/L",
+                fontSize = 14.sp,
+                color = Color(0xFF059669),
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+// ==================== AMOUNT & LITERS ====================
+
+@Composable
+fun AmountLitersSection(
     amount: String,
     onAmountChange: (String) -> Unit,
     litersSold: Double,
-    pricePerLiter: Double,
-    fuelTypeName: String,
     enabled: Boolean
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(6.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        // Amount Input
+        Card(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            // Price info row
-            if (pricePerLiter > 0) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "💰 ${if (fuelTypeName.isNotEmpty()) fuelTypeName else "Fuel"} @ KES ${String.format("%.2f", pricePerLiter)}/L",
-                        fontSize = 12.sp,
-                        color = Color(0xFF06B6D4),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            // Amount and Liters side by side
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Amount Input
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        "💵 Amount (KES)",
-                        fontSize = 11.sp,
+                Text(
+                    "💵 Amount (KES)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF16A34A)
+                )
+                TextField(
+                    value = amount,
+                    onValueChange = onAmountChange,
+                    enabled = enabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF0FDF4))
+                        .border(1.5.dp, Color(0xFF22C55E).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                    placeholder = {
+                        Text("0", color = Color(0xFF94A3B8), fontSize = 20.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    },
+                    textStyle = MaterialTheme.typography.headlineSmall.copy(
+                        color = Color(0xFF1E293B),
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF16A34A)
+                        textAlign = TextAlign.Center
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                        cursorColor = Color(0xFF22C55E)
                     )
-                    TextField(
-                        value = amount,
-                        onValueChange = onAmountChange,
-                        enabled = enabled,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF0FDF4))
-                            .border(2.dp, Color(0xFF22C55E).copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                        placeholder = {
-                            Text("0", color = TextSecondary, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        },
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
-                            color = OnSurface,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        ),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            cursorColor = Color(0xFF22C55E)
-                        )
-                    )
-                }
+                )
+            }
+        }
 
-                // Liters Display
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+        // Liters Display
+        Card(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "⛽ Liters (Auto)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2563EB)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFEFF6FF))
+                        .border(1.5.dp, Color(0xFF3B82F6).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "⛽ Liters (Auto)",
-                        fontSize = 11.sp,
+                        text = "${String.format("%.2f", litersSold)} L",
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2563EB)
                     )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFEFF6FF))
-                            .border(2.dp, Color(0xFF3B82F6).copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "${String.format("%.2f", litersSold)} L",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2563EB)
-                        )
-                    }
                 }
             }
         }
     }
 }
 
-// ==================== PAYMENT METHOD SELECTOR ====================
+// ==================== PAYMENT METHOD ====================
 
 @Composable
-fun PaymentMethodSelector(
+fun PaymentMethodSection(
     selectedMethod: PaymentMethod,
     onMethodSelect: (PaymentMethod) -> Unit,
     enabled: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // M-Pesa Button
-        PaymentMethodButton(
+        // M-Pesa
+        PaymentOptionCard(
             emoji = "📱",
             label = "M-Pesa",
             isSelected = selectedMethod == PaymentMethod.MPESA,
             enabled = enabled,
-            gradientColors = listOf(Color(0xFF22C55E), Color(0xFF16A34A)),
+            selectedColor = Color(0xFF10B981),
             onClick = { onMethodSelect(PaymentMethod.MPESA) },
             modifier = Modifier.weight(1f)
         )
 
-        // Cash Button
-        PaymentMethodButton(
+        // Cash
+        PaymentOptionCard(
             emoji = "💵",
             label = "Cash",
             isSelected = selectedMethod == PaymentMethod.CASH,
             enabled = enabled,
-            gradientColors = listOf(Color(0xFFF97316), Color(0xFFEA580C)),
+            selectedColor = Color(0xFFF59E0B),
             onClick = { onMethodSelect(PaymentMethod.CASH) },
             modifier = Modifier.weight(1f)
         )
@@ -515,36 +647,34 @@ fun PaymentMethodSelector(
 }
 
 @Composable
-fun PaymentMethodButton(
+fun PaymentOptionCard(
     emoji: String,
     label: String,
     isSelected: Boolean,
     enabled: Boolean,
-    gradientColors: List<Color>,
+    selectedColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .height(60.dp)
-            .shadow(if (isSelected) 8.dp else 2.dp, RoundedCornerShape(14.dp))
             .clickable(enabled = enabled) { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color.Transparent else Color.White
+            containerColor = if (isSelected) selectedColor else Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 4.dp else 2.dp
         )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isSelected) {
-                        Modifier.background(
-                            brush = Brush.horizontalGradient(gradientColors)
-                        )
-                    } else {
-                        Modifier.border(2.dp, Color(0xFFE2E8F0), RoundedCornerShape(14.dp))
-                    }
+                    if (!isSelected) {
+                        Modifier.border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(14.dp))
+                    } else Modifier
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -552,13 +682,13 @@ fun PaymentMethodButton(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Text(emoji, fontSize = 22.sp)
+                Text(emoji, fontSize = 20.sp)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = label,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Color.White else OnSurface
+                    color = if (isSelected) Color.White else Color(0xFF334155)
                 )
                 if (isSelected) {
                     Spacer(modifier = Modifier.width(6.dp))
@@ -574,30 +704,29 @@ fun PaymentMethodButton(
     }
 }
 
-// ==================== PHONE NUMBER INPUT ====================
+// ==================== PHONE INPUT ====================
 
 @Composable
-fun PhoneNumberInput(
+fun PhoneInputCard(
     mobile: String,
     onMobileChange: (String) -> Unit,
     enabled: Boolean
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 "📞 Customer Phone Number",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFDB2777)
+                color = Color(0xFF7C3AED)
             )
             TextField(
                 value = mobile,
@@ -607,14 +736,14 @@ fun PhoneNumberInput(
                     .fillMaxWidth()
                     .height(52.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFFDF2F8))
-                    .border(1.5.dp, Color(0xFFEC4899).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                    .background(Color(0xFFF5F3FF))
+                    .border(1.5.dp, Color(0xFF8B5CF6).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
                 placeholder = {
-                    Text("07XXXXXXXX", color = TextSecondary, fontSize = 15.sp)
+                    Text("07XXXXXXXX", color = Color(0xFF94A3B8), fontSize = 16.sp)
                 },
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = OnSurface,
-                    fontSize = 16.sp,
+                    color = Color(0xFF1E293B),
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Medium
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -626,42 +755,42 @@ fun PhoneNumberInput(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
-                    cursorColor = Color(0xFFEC4899)
+                    cursorColor = Color(0xFF8B5CF6)
                 )
             )
         }
     }
 }
 
-// ==================== VALIDATION ERROR ====================
+// ==================== ERROR BANNER ====================
 
 @Composable
-fun ValidationErrorCard(message: String) {
+fun ErrorBanner(message: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("⚠️", fontSize = 16.sp)
+            Text("⚠️", fontSize = 18.sp)
             Text(
                 text = message,
-                color = Error,
-                fontSize = 12.sp,
+                color = Color(0xFFDC2626),
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
-// ==================== MAIN PAYMENT BUTTON ====================
+// ==================== PAYMENT BUTTON ====================
 
 @Composable
-fun MainPaymentButton(
+fun PaymentActionButton(
     isProcessing: Boolean,
     isEnabled: Boolean,
     paymentMethod: PaymentMethod,
@@ -674,70 +803,44 @@ fun MainPaymentButton(
         enabled = isEnabled,
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
-            .shadow(
-                elevation = if (isEnabled) 12.dp else 4.dp,
-                shape = RoundedCornerShape(16.dp),
-                spotColor = if (isEnabled) Color(0xFF7C3AED).copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.2f)
-            ),
+            .height(58.dp),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent
+            containerColor = if (paymentMethod == PaymentMethod.MPESA) Color(0xFF10B981) else Color(0xFFF59E0B),
+            disabledContainerColor = Color(0xFFCBD5E1)
         ),
-        contentPadding = PaddingValues(0.dp)
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 2.dp
+        )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = if (isEnabled) {
-                        if (paymentMethod == PaymentMethod.MPESA) {
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF22C55E), Color(0xFF16A34A), Color(0xFF15803D))
-                            )
-                        } else {
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFFF97316), Color(0xFFEA580C), Color(0xFFC2410C))
-                            )
-                        }
-                    } else {
-                        Brush.horizontalGradient(
-                            listOf(Color.Gray.copy(alpha = 0.4f), Color.Gray.copy(alpha = 0.3f))
-                        )
-                    },
-                    shape = RoundedCornerShape(16.dp)
-                ),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (isProcessing) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Processing... ($pollingAttempt/$maxAttempts)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                } else {
-                    Text(
-                        text = if (paymentMethod == PaymentMethod.MPESA) "📱" else "💵",
-                        fontSize = 20.sp
-                    )
-                    Text(
-                        text = if (paymentMethod == PaymentMethod.MPESA) "Send M-Pesa STK Push" else "Record Cash Sale",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Processing... ($pollingAttempt/$maxAttempts)",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            } else {
+                Text(
+                    text = if (paymentMethod == PaymentMethod.MPESA) "📱" else "💵",
+                    fontSize = 22.sp
+                )
+                Text(
+                    text = if (paymentMethod == PaymentMethod.MPESA) "Send M-Pesa STK Push" else "Record Cash Sale",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
             }
         }
     }
@@ -746,53 +849,53 @@ fun MainPaymentButton(
 // ==================== QUICK ACTIONS ====================
 
 @Composable
-fun QuickActionsRow(
+fun QuickActionsBar(
     onClear: () -> Unit,
     onRefresh: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        QuickActionChip(
+        ActionButton(
             emoji = "🔄",
             label = "Clear",
             onClick = onClear,
-            modifier = Modifier.weight(1f),
             backgroundColor = Color(0xFFFEE2E2),
-            textColor = Error
+            textColor = Color(0xFFDC2626),
+            modifier = Modifier.weight(1f)
         )
-        QuickActionChip(
+        ActionButton(
             emoji = "♻️",
             label = "Refresh",
             onClick = onRefresh,
-            modifier = Modifier.weight(1f),
-            backgroundColor = Color(0xFFEFF6FF),
-            textColor = Color(0xFF2563EB)
+            backgroundColor = Color(0xFFE0F2FE),
+            textColor = Color(0xFF0284C7),
+            modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-fun QuickActionChip(
+fun ActionButton(
     emoji: String,
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
     backgroundColor: Color,
-    textColor: Color
+    textColor: Color,
+    modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
-            .height(44.dp)
+            .height(46.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = backgroundColor)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
@@ -800,7 +903,7 @@ fun QuickActionChip(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = textColor
             )
@@ -808,10 +911,10 @@ fun QuickActionChip(
     }
 }
 
-// ==================== PROCESSING DIALOG ====================
+// ==================== DIALOGS ====================
 
 @Composable
-fun ProcessingDialog(
+fun MpesaProcessingDialog(
     pollingAttempt: Int,
     maxAttempts: Int
 ) {
@@ -824,7 +927,7 @@ fun ProcessingDialog(
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(60.dp),
-                    color = Color(0xFF22C55E),
+                    color = Color(0xFF10B981),
                     strokeWidth = 4.dp
                 )
                 Text("📱", fontSize = 28.sp)
@@ -846,13 +949,13 @@ fun ProcessingDialog(
                 Text(
                     "Please check your phone for the STK Push prompt and enter your M-Pesa PIN",
                     textAlign = TextAlign.Center,
-                    color = TextSecondary,
+                    color = Color(0xFF64748B),
                     fontSize = 14.sp
                 )
                 Text(
                     "Checking... ($pollingAttempt/$maxAttempts)",
                     fontSize = 12.sp,
-                    color = Color(0xFF22C55E),
+                    color = Color(0xFF10B981),
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -863,10 +966,8 @@ fun ProcessingDialog(
     )
 }
 
-// ==================== SUCCESS DIALOG ====================
-
 @Composable
-fun PaymentSuccessDialog(
+fun SuccessDialog(
     message: String,
     receipt: String?,
     receiptNumber: String,
@@ -880,12 +981,7 @@ fun PaymentSuccessDialog(
                 modifier = Modifier
                     .size(70.dp)
                     .background(
-                        brush = Brush.linearGradient(
-                            if (paymentMethod == PaymentMethod.MPESA)
-                                listOf(Color(0xFF22C55E), Color(0xFF16A34A))
-                            else
-                                listOf(Color(0xFFF97316), Color(0xFFEA580C))
-                        ),
+                        color = if (paymentMethod == PaymentMethod.MPESA) Color(0xFFD1FAE5) else Color(0xFFFEF3C7),
                         shape = RoundedCornerShape(18.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -911,16 +1007,14 @@ fun PaymentSuccessDialog(
                 Text(
                     text = message,
                     textAlign = TextAlign.Center,
-                    color = OnSurface,
+                    color = Color(0xFF334155),
                     fontSize = 14.sp
                 )
                 
-                // Receipt Card
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (paymentMethod == PaymentMethod.MPESA)
-                            Color(0xFFF0FDF4) else Color(0xFFFFF7ED)
+                        containerColor = if (paymentMethod == PaymentMethod.MPESA) Color(0xFFF0FDF4) else Color(0xFFFFFBEB)
                     )
                 ) {
                     Column(
@@ -930,21 +1024,20 @@ fun PaymentSuccessDialog(
                         Text(
                             "Receipt Number",
                             fontSize = 11.sp,
-                            color = TextSecondary
+                            color = Color(0xFF64748B)
                         )
                         Text(
                             text = receiptNumber,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (paymentMethod == PaymentMethod.MPESA) 
-                                Color(0xFF16A34A) else Color(0xFFEA580C)
+                            color = if (paymentMethod == PaymentMethod.MPESA) Color(0xFF059669) else Color(0xFFD97706)
                         )
                         if (!receipt.isNullOrEmpty() && paymentMethod == PaymentMethod.MPESA) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 "M-Pesa: $receipt",
                                 fontSize = 12.sp,
-                                color = Color(0xFF22C55E),
+                                color = Color(0xFF10B981),
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -956,31 +1049,17 @@ fun PaymentSuccessDialog(
             Button(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (paymentMethod == PaymentMethod.MPESA) Color(0xFF10B981) else Color(0xFFF59E0B)
+                ),
                 modifier = Modifier.height(44.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                if (paymentMethod == PaymentMethod.MPESA)
-                                    listOf(Color(0xFF22C55E), Color(0xFF16A34A))
-                                else
-                                    listOf(Color(0xFFF97316), Color(0xFFEA580C))
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "✅ Done - New Sale",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-                }
+                Text(
+                    "✅ Done - New Sale",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
         },
         containerColor = Color.White,
@@ -988,11 +1067,9 @@ fun PaymentSuccessDialog(
     )
 }
 
-// Legacy function aliases for compatibility
+// Legacy compatibility
 @Composable
-fun ModernSaleIdCard(saleId: String) {
-    // Kept for compatibility - handled in header now
-}
+fun ModernSaleIdCard(saleId: String) { }
 
 @Composable
 fun ModernPaymentSuccessDialog(
@@ -1000,10 +1077,98 @@ fun ModernPaymentSuccessDialog(
     receipt: String?,
     checkoutRequestId: String?,
     onDismiss: () -> Unit
-) = PaymentSuccessDialog(
+) = SuccessDialog(
     message = message,
     receipt = receipt,
     receiptNumber = receipt ?: "",
     paymentMethod = PaymentMethod.MPESA,
     onDismiss = onDismiss
 )
+
+// Keep old names for backward compatibility
+@Composable
+fun CompactHeader(
+    receiptNumber: String,
+    userName: String = "",
+    shiftName: String = "",
+    onNavigateBack: () -> Unit
+) = LightHeader(receiptNumber, userName, shiftName, onNavigateBack)
+
+@Composable
+fun UserShiftInfoCard(
+    userName: String,
+    shiftName: String,
+    pumpName: String
+) = AttendantInfoCard(userName, shiftName, pumpName)
+
+@Composable
+fun PumpSelectionRow(
+    pumps: List<Pump>,
+    selectedPump: Pump?,
+    onPumpSelect: (Pump) -> Unit
+) = PumpSelectorCard(pumps, selectedPump, onPumpSelect)
+
+@Composable 
+fun PaymentMethodSelector(
+    selectedMethod: PaymentMethod,
+    onMethodSelect: (PaymentMethod) -> Unit,
+    enabled: Boolean
+) = PaymentMethodSection(selectedMethod, onMethodSelect, enabled)
+
+@Composable
+fun PhoneNumberInput(
+    mobile: String,
+    onMobileChange: (String) -> Unit,
+    enabled: Boolean  
+) = PhoneInputCard(mobile, onMobileChange, enabled)
+
+@Composable
+fun ValidationErrorCard(message: String) = ErrorBanner(message)
+
+@Composable
+fun MainPaymentButton(
+    isProcessing: Boolean,
+    isEnabled: Boolean,
+    paymentMethod: PaymentMethod,
+    pollingAttempt: Int,
+    maxAttempts: Int,
+    onClick: () -> Unit
+) = PaymentActionButton(isProcessing, isEnabled, paymentMethod, pollingAttempt, maxAttempts, onClick)
+
+@Composable
+fun QuickActionsRow(
+    onClear: () -> Unit,
+    onRefresh: () -> Unit
+) = QuickActionsBar(onClear, onRefresh)
+
+@Composable
+fun ProcessingDialog(
+    pollingAttempt: Int,
+    maxAttempts: Int
+) = MpesaProcessingDialog(pollingAttempt, maxAttempts)
+
+@Composable
+fun PaymentSuccessDialog(
+    message: String,
+    receipt: String?,
+    receiptNumber: String,
+    paymentMethod: PaymentMethod,
+    onDismiss: () -> Unit
+) = SuccessDialog(message, receipt, receiptNumber, paymentMethod, onDismiss)
+
+@Composable
+fun PumpChip(
+    pump: Pump,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) = PumpChipModern(pump, isSelected, onClick)
+
+@Composable
+fun AmountLitersCard(
+    amount: String,
+    onAmountChange: (String) -> Unit,
+    litersSold: Double,
+    pricePerLiter: Double,
+    fuelTypeName: String,
+    enabled: Boolean
+) = AmountLitersSection(amount, onAmountChange, litersSold, enabled)
