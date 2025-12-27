@@ -1,31 +1,31 @@
 -- =====================================================
--- PAYROLL & EXPENSES SCHEMA (FOR users_new TABLE)
+-- PAYROLL & EXPENSES SCHEMA (CORRECTED)
 -- Energy App - Employee Payroll & Expense Management
--- Compatible with users_new table (user_id INT)
+-- Compatible with Supabase users table (id UUID)
 -- =====================================================
 
--- 1. ALTER USERS_NEW TABLE - Add National ID and Salary fields
+-- 1. ALTER USERS TABLE - Add National ID and Salary fields
 -- =====================================================
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS national_id VARCHAR(20);
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS monthly_salary DECIMAL(12,2) DEFAULT 0;
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS bank_account VARCHAR(50);
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS kra_pin VARCHAR(20);
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS nhif_number VARCHAR(20);
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS nssf_number VARCHAR(20);
-ALTER TABLE users_new ADD COLUMN IF NOT EXISTS employment_date DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS national_id VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_salary DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_account VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS kra_pin VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nhif_number VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nssf_number VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_date DATE;
 
 -- 2. SALARY ADVANCES TABLE
--- Using INT for user_id (compatible with users_new table)
+-- Using UUID for user references (compatible with Supabase auth.users)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS salary_advances (
     advance_id SERIAL PRIMARY KEY,
     advance_code VARCHAR(20) NOT NULL UNIQUE,
-    user_id INT NOT NULL REFERENCES users_new(user_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     amount DECIMAL(12,2) NOT NULL,
     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_date TIMESTAMP,
-    approved_by INT REFERENCES users_new(user_id),
+    approved_by UUID REFERENCES users(id),
     repayment_month VARCHAR(7), -- Format: YYYY-MM
     status VARCHAR(20) DEFAULT 'pending', -- pending, approved, rejected, repaid
     reason TEXT,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS salary_advances (
 CREATE TABLE IF NOT EXISTS payroll (
     payroll_id SERIAL PRIMARY KEY,
     payroll_code VARCHAR(20) NOT NULL UNIQUE,
-    user_id INT NOT NULL REFERENCES users_new(user_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     pay_period VARCHAR(7) NOT NULL, -- Format: YYYY-MM
     
     -- Earnings
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS payroll (
     mpesa_receipt VARCHAR(20),
     
     -- Metadata
-    created_by INT REFERENCES users_new(user_id),
+    created_by UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT
@@ -90,9 +90,9 @@ CREATE TABLE IF NOT EXISTS expenses (
     expense_date DATE NOT NULL,
     due_date DATE,
     status VARCHAR(20) DEFAULT 'pending', -- pending, approved, paid
-    approved_by INT REFERENCES users_new(user_id),
+    approved_by UUID REFERENCES users(id),
     approved_date TIMESTAMP,
-    created_by INT REFERENCES users_new(user_id),
+    created_by UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT
@@ -117,9 +117,9 @@ CREATE TABLE IF NOT EXISTS vouchers (
     mpesa_receipt VARCHAR(20),
     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(20) DEFAULT 'pending', -- pending, approved, paid, cancelled
-    approved_by INT REFERENCES users_new(user_id),
+    approved_by UUID REFERENCES users(id),
     approved_date TIMESTAMP,
-    paid_by INT REFERENCES users_new(user_id),
+    paid_by UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT
@@ -175,13 +175,6 @@ ALTER TABLE payroll ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vouchers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expense_categories ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies (for re-running script safely)
-DROP POLICY IF EXISTS "Allow authenticated access to salary_advances" ON salary_advances;
-DROP POLICY IF EXISTS "Allow authenticated access to payroll" ON payroll;
-DROP POLICY IF EXISTS "Allow authenticated access to expenses" ON expenses;
-DROP POLICY IF EXISTS "Allow authenticated access to vouchers" ON vouchers;
-DROP POLICY IF EXISTS "Allow authenticated access to expense_categories" ON expense_categories;
 
 -- Create policies for authenticated users
 CREATE POLICY "Allow authenticated access to salary_advances" ON salary_advances

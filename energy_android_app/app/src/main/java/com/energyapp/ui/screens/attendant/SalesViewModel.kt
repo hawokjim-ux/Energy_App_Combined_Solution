@@ -311,26 +311,19 @@ class SalesViewModel @Inject constructor(
         val pump = _uiState.value.selectedPump ?: return
         val amount = _uiState.value.amount.trim().toDoubleOrNull() ?: return
         val receiptNumber = _uiState.value.receiptNumber
+        val litersSold = _uiState.value.litersSold
+        val pricePerLiter = _uiState.value.pricePerLiter
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isProcessing = true)
 
             try {
                 val shiftId = pump.currentShiftId ?: 0
-                val saleIdNo = "CASH-${System.currentTimeMillis()}"
+                // Use RCP-XXXXX format matching web app
+                val saleIdNo = receiptNumber
+                val currentTime = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(java.util.Date())
 
-                // Create sale record
-                val saleRecord = mapOf(
-                    "sale_id_no" to saleIdNo,
-                    "pump_shift_id" to shiftId,
-                    "pump_id" to pump.pumpId,
-                    "attendant_id" to userId,
-                    "amount" to amount,
-                    "customer_mobile_no" to (_uiState.value.customerMobile.ifEmpty { "CASH" }),
-                    "transaction_status" to "SUCCESS"
-                )
-
-                // Save to database
+                // Create sale with ALL fields matching web app
                 val result = supabaseApiService.createSale(
                     com.energyapp.data.remote.models.CreateSaleRequest(
                         saleIdNo = saleIdNo,
@@ -339,16 +332,23 @@ class SalesViewModel @Inject constructor(
                         attendantId = userId,
                         amount = amount,
                         customerMobileNo = _uiState.value.customerMobile.ifEmpty { "CASH" },
-                        transactionStatus = "SUCCESS"
+                        transactionStatus = "CASH",  // CASH instead of SUCCESS
+                        stationId = 1,
+                        fuelTypeId = pump.fuelTypeId,
+                        litersSold = litersSold,
+                        pricePerLiter = pricePerLiter,
+                        totalAmount = amount,  // Same as amount
+                        paymentMethod = "cash",  // Explicit payment method
+                        saleTime = currentTime
                     )
                 )
 
                 if (result.isSuccess) {
-                    Log.d(TAG, "✅ Cash sale recorded successfully")
+                    Log.d(TAG, "✅ Cash sale recorded successfully: $saleIdNo")
                     _uiState.value = _uiState.value.copy(
                         isProcessing = false,
-                        successMessage = "💵 Cash Payment Recorded!\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L",
-                        mpesaReceipt = receiptNumber,
+                        successMessage = "💵 Cash Payment Recorded!\nReceipt: $saleIdNo\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", litersSold)} L",
+                        mpesaReceipt = saleIdNo,
                         salesCount = _uiState.value.salesCount + 1
                     )
                 } else {

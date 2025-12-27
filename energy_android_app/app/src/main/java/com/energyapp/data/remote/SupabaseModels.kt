@@ -219,7 +219,26 @@ data class CreateSaleRequest(
     @SerializedName("transaction_status")
     val transactionStatus: String = "PENDING",
     @SerializedName("checkout_request_id")
-    val checkoutRequestId: String? = null
+    val checkoutRequestId: String? = null,
+    // Additional detailed fields (matching web app)
+    @SerializedName("station_id")
+    val stationId: Int = 1,
+    @SerializedName("fuel_type_id")
+    val fuelTypeId: Int? = null,
+    @SerializedName("liters_sold")
+    val litersSold: Double = 0.0,
+    @SerializedName("price_per_liter")
+    val pricePerLiter: Double = 0.0,
+    @SerializedName("total_amount")
+    val totalAmount: Double = 0.0,
+    @SerializedName("payment_method")
+    val paymentMethod: String = "cash",
+    @SerializedName("sale_time")
+    val saleTime: String? = null,
+    @SerializedName("mpesa_transaction_id")
+    val mpesaTransactionId: String? = null,
+    @SerializedName("mpesa_receipt_number")
+    val mpesaReceiptNumber: String? = null
 )
 
 // ==================== Attendant Models ====================
