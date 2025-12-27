@@ -49,16 +49,14 @@ fun SalesScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val scrollState = rememberScrollState()
 
-    Box(
+    Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC)) // Light gray background
-            .imePadding() // Handle keyboard
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
+            .background(Color(0xFFF8FAFC)),
+        containerColor = Color(0xFFF8FAFC),
+        topBar = {
             // LIGHT Gradient Header
             LightHeader(
                 receiptNumber = uiState.receiptNumber,
@@ -66,15 +64,19 @@ fun SalesScreen(
                 shiftName = uiState.currentShiftName,
                 onNavigateBack = onNavigateBack
             )
-
-            // Main Content - Keyboard-aware scrollable column
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
+        }
+    ) { paddingValues ->
+        // Main Content - Keyboard-aware scrollable column
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .imePadding() // This handles keyboard
+                .navigationBarsPadding() // This handles nav bar
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
                 // User & Shift Info Card
                 if (uiState.loggedInUserName.isNotEmpty() || uiState.currentShiftName.isNotEmpty()) {
                     AttendantInfoCard(
@@ -144,8 +146,6 @@ fun SalesScreen(
                         onClear = viewModel::clearForm,
                         onRefresh = viewModel::refresh
                     )
-                }
-
                 // Extra space for keyboard
                 Spacer(modifier = Modifier.height(100.dp))
             }

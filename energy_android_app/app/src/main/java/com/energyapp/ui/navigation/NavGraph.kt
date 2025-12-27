@@ -164,9 +164,11 @@ fun NavGraph(
 
         composable(Screen.Sales.route) {
             val userId by preferencesManager.userId.collectAsState(initial = null)
+            val fullName by preferencesManager.fullName.collectAsState(initial = "")
             if (userId != null) {
                 val viewModel: SalesViewModel = hiltViewModel()
-                viewModel.setUserId(userId!!)
+                // Pass both userId and fullName to the ViewModel
+                viewModel.setUserInfo(userId!!, fullName ?: "Attendant")
                 SalesScreen(
                     viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }
