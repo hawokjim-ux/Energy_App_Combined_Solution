@@ -66,6 +66,17 @@ interface SupabaseApi {
         @Query("pump_id") pumpId: String
     )
 
+    // ==================== Fuel Types ====================
+    @GET("fuel_types")
+    suspend fun getFuelTypes(
+        @Query("is_active") isActive: String = "eq.true"
+    ): List<FuelTypeResponse>
+
+    @GET("fuel_types")
+    suspend fun getFuelTypeById(
+        @Query("fuel_type_id") fuelTypeId: String
+    ): List<FuelTypeResponse>
+
     @POST("shifts")
     suspend fun createShift(@Body shift: Map<String, @JvmSuppressWildcards Any>): List<ShiftResponse>
 
@@ -384,6 +395,34 @@ class SupabaseApiService @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error deleting pump: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // ==================== Fuel Types ====================
+    suspend fun getFuelTypes(): Result<List<FuelTypeResponse>> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "⛽ Fetching fuel types...")
+            val fuelTypes = api.getFuelTypes()
+            Log.d(TAG, "✅ Retrieved ${fuelTypes.size} fuel types")
+            Result.success(fuelTypes)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching fuel types: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getFuelTypeById(fuelTypeId: Int): Result<FuelTypeResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "⛽ Fetching fuel type: $fuelTypeId")
+            val fuelTypes = api.getFuelTypeById("eq.$fuelTypeId")
+            if (fuelTypes.isNotEmpty()) {
+                Result.success(fuelTypes.first())
+            } else {
+                Result.failure(Exception("Fuel type not found"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching fuel type: ${e.message}")
             Result.failure(e)
         }
     }

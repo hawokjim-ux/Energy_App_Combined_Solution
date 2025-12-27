@@ -6,11 +6,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.energyapp.ui.components.ErrorDialog
@@ -32,8 +33,14 @@ import com.energyapp.ui.components.LoadingDialog
 import com.energyapp.ui.theme.*
 
 /**
- * Sales Screen - Super Modern 2024 Design
- * Light theme with vibrant gradients for outdoor visibility
+ * Sales Screen - Super Modern Compact 2024 Design
+ * Features:
+ * - Cash + M-Pesa payment options
+ * - Auto-calculate liters from amount
+ * - Receipt number like web app (RCP-XXXXX)
+ * - Compact layout - no scrolling needed
+ * - Faster STK Push polling
+ * - Light theme with vibrant gradients
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,161 +55,95 @@ fun SalesScreen(
             .fillMaxSize()
             .background(LightBackground)
     ) {
-        Scaffold(
-            topBar = {
-                // Stunning Gradient Header
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    GradientPurple,
-                                    GradientCyan,
-                                    GradientPink
-                                )
-                            )
-                        )
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Glassmorphism Back Button
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.2f))
-                                    .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
-                                    .clickable { onNavigateBack() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Rounded.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    "Record Sale",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 22.sp,
-                                    color = Color.White
-                                )
-                                Text(
-                                    "M-Pesa STK Push",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                        // Glassmorphism More Button
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f))
-                                .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.MoreVert,
-                                contentDescription = "More",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
-            },
-            containerColor = LightBackground
-        ) { paddingValues ->
-            LazyColumn(
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Compact Gradient Header
+            CompactHeader(
+                receiptNumber = uiState.receiptNumber,
+                onNavigateBack = onNavigateBack
+            )
+
+            // Main Content - Single scrollable column
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
-                    ModernSaleIdCard(saleId = uiState.saleIdNo)
-                }
-
-                item {
-                    ModernPumpSelectionCard(
-                        pumps = uiState.pumps,
-                        selectedPump = uiState.selectedPump,
-                        onPumpSelect = viewModel::selectPump
-                    )
-                }
+                // Pump Selection - Horizontal chips
+                PumpSelectionRow(
+                    pumps = uiState.pumps,
+                    selectedPump = uiState.selectedPump,
+                    onPumpSelect = viewModel::selectPump
+                )
 
                 if (uiState.pumps.isEmpty()) {
-                    item {
-                        ModernNoPumpsCard()
-                    }
+                    NoPumpsWarning()
                 } else {
-                    item {
-                        ModernSaleAmountCard(
-                            amount = uiState.amount,
-                            onAmountChange = viewModel::onAmountChange,
-                            enabled = !uiState.isProcessing
-                        )
-                    }
+                    // Amount & Liters Card - Side by side
+                    AmountLitersCard(
+                        amount = uiState.amount,
+                        onAmountChange = viewModel::onAmountChange,
+                        litersSold = uiState.litersSold,
+                        pricePerLiter = uiState.pricePerLiter,
+                        fuelTypeName = uiState.selectedPump?.fuelTypeName ?: "",
+                        enabled = !uiState.isProcessing
+                    )
 
-                    item {
-                        ModernCustomerDetailsCard(
+                    // Payment Method Selection
+                    PaymentMethodSelector(
+                        selectedMethod = uiState.paymentMethod,
+                        onMethodSelect = viewModel::setPaymentMethod,
+                        enabled = !uiState.isProcessing
+                    )
+
+                    // Phone Number (only for M-Pesa)
+                    if (uiState.paymentMethod == PaymentMethod.MPESA) {
+                        PhoneNumberInput(
                             mobile = uiState.customerMobile,
                             onMobileChange = viewModel::onCustomerMobileChange,
                             enabled = !uiState.isProcessing
                         )
                     }
 
-                    item {
-                        ModernPaymentMethodCard()
+                    // Validation Error
+                    if (uiState.validationError != null) {
+                        ValidationErrorCard(uiState.validationError!!)
                     }
 
-                    item {
-                        ModernPaymentButton(
-                            isProcessing = uiState.isProcessing,
-                            isEnabled = !uiState.isProcessing && uiState.pumps.isNotEmpty(),
-                            onClick = viewModel::initiateMpesaPayment
-                        )
-                    }
+                    // Main Action Button
+                    MainPaymentButton(
+                        isProcessing = uiState.isProcessing,
+                        isEnabled = !uiState.isProcessing && uiState.pumps.isNotEmpty(),
+                        paymentMethod = uiState.paymentMethod,
+                        pollingAttempt = uiState.pollingAttempt,
+                        maxAttempts = uiState.maxPollingAttempts,
+                        onClick = viewModel::processPayment
+                    )
 
-                    item {
-                        ModernQuickActionButtons(
-                            onClear = viewModel::clearForm,
-                            onHistory = { /* TODO */ },
-                            onReceipt = { /* TODO */ }
-                        )
-                    }
-
-                    item {
-                        ModernMPesaInfoCard()
-                    }
+                    // Quick Actions Row
+                    QuickActionsRow(
+                        onClear = viewModel::clearForm,
+                        onRefresh = viewModel::refresh
+                    )
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(20.dp))
-                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
 
-    if (uiState.isProcessing) {
-        LoadingDialog(message = "Processing M-Pesa payment...\nPlease check your phone for STK Push")
+    // Processing Dialog
+    if (uiState.isProcessing && uiState.paymentMethod == PaymentMethod.MPESA) {
+        ProcessingDialog(
+            pollingAttempt = uiState.pollingAttempt,
+            maxAttempts = uiState.maxPollingAttempts
+        )
     }
 
+    // Error Dialog
     if (uiState.error != null) {
         ErrorDialog(
             message = uiState.error!!,
@@ -210,105 +151,80 @@ fun SalesScreen(
         )
     }
 
+    // Success Dialog
     if (uiState.successMessage != null) {
-        ModernPaymentSuccessDialog(
+        PaymentSuccessDialog(
             message = uiState.successMessage!!,
             receipt = uiState.mpesaReceipt,
-            checkoutRequestId = uiState.checkoutRequestId,
-            onDismiss = viewModel::clearMessages
+            receiptNumber = uiState.receiptNumber,
+            paymentMethod = uiState.paymentMethod,
+            onDismiss = {
+                viewModel.clearMessages()
+                viewModel.clearForm()
+            }
         )
     }
 }
 
-// ==================== MODERN SALE ID CARD ====================
+// ==================== COMPACT HEADER ====================
 
 @Composable
-fun ModernSaleIdCard(saleId: String) {
-    Card(
+fun CompactHeader(
+    receiptNumber: String,
+    onNavigateBack: () -> Unit
+) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = GradientPurple.copy(alpha = 0.15f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // Purple Accent Line
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(70.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(GradientPurple, GradientCyan)
-                        ),
-                        shape = RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFF7C3AED), // Purple
+                        Color(0xFF06B6D4), // Cyan
+                        Color(0xFFEC4899)  // Pink
                     )
+                )
             )
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(
-                                brush = Brush.linearGradient(
-                                    listOf(IconGradientPurple1, IconGradientPurple2)
-                                ),
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Receipt,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Sale Transaction ID",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-                        Text(
-                            text = saleId,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = OnSurface,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                    }
-                }
+                // Back Button
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .background(
-                            color = GradientPurple.copy(alpha = 0.1f),
-                            shape = CircleShape
-                        )
-                        .clickable { /* Copy */ },
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f))
+                        .clickable { onNavigateBack() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Rounded.ContentCopy,
-                        contentDescription = "Copy",
-                        tint = GradientPurple,
-                        modifier = Modifier.size(18.dp)
+                        Icons.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        "⛽ Record Sale",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color.White
+                    )
+                    Text(
+                        "📝 $receiptNumber",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -316,10 +232,10 @@ fun ModernSaleIdCard(saleId: String) {
     }
 }
 
-// ==================== MODERN PUMP SELECTION ====================
+// ==================== PUMP SELECTION ====================
 
 @Composable
-fun ModernPumpSelectionCard(
+fun PumpSelectionRow(
     pumps: List<Pump>,
     selectedPump: Pump?,
     onPumpSelect: (Pump) -> Unit
@@ -327,47 +243,24 @@ fun ModernPumpSelectionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = GradientCyan.copy(alpha = 0.15f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            .shadow(4.dp, RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(
-                            brush = Brush.linearGradient(
-                                listOf(IconGradientCyan1, IconGradientCyan2)
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.LocalGasStation,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Text("⛽", fontSize = 16.sp)
                 Text(
-                    text = "Select Pump",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = OnSurface,
+                    "Select Pump",
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    color = OnSurface
                 )
             }
 
@@ -375,11 +268,11 @@ fun ModernPumpSelectionCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 pumps.forEach { pump ->
-                    ModernPumpChip(
-                        pumpName = pump.pumpName,
+                    PumpChip(
+                        pump = pump,
                         isSelected = selectedPump?.pumpId == pump.pumpId,
                         onClick = { onPumpSelect(pump) }
                     )
@@ -390,204 +283,301 @@ fun ModernPumpSelectionCard(
 }
 
 @Composable
-fun ModernPumpChip(
-    pumpName: String,
+fun PumpChip(
+    pump: Pump,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(10.dp))
             .then(
                 if (isSelected) {
                     Modifier.background(
                         brush = Brush.horizontalGradient(
-                            listOf(GradientCyan, GradientTeal)
+                            listOf(Color(0xFF06B6D4), Color(0xFF14B8A6))
                         )
                     )
                 } else {
                     Modifier
-                        .background(CardBackground)
-                        .border(1.5.dp, CardBorder, RoundedCornerShape(14.dp))
+                        .background(Color(0xFFF1F5F9))
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
                 }
             )
             .clickable { onClick() }
-            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = if (isSelected) Color.White else TextSecondary,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = pumpName,
-                color = if (isSelected) Color.White else OnSurface,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-fun ModernNoPumpsCard() {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = Error.copy(alpha = 0.15f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = ErrorLight),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(Error.copy(alpha = 0.15f), CircleShape),
-                contentAlignment = Alignment.Center
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Icon(
-                    Icons.Rounded.Warning,
+                    imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.LocalGasStation,
                     contentDescription = null,
-                    tint = Error,
-                    modifier = Modifier.size(24.dp)
+                    tint = if (isSelected) Color.White else TextSecondary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = pump.pumpName,
+                    color = if (isSelected) Color.White else OnSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
+            if (pump.fuelTypeName.isNotEmpty()) {
+                Text(
+                    text = pump.fuelTypeName,
+                    color = if (isSelected) Color.White.copy(alpha = 0.8f) else TextSecondary,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun NoPumpsWarning() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("⚠️", fontSize = 20.sp)
             Text(
                 text = "No pumps available. Ask admin to open a shift.",
-                style = MaterialTheme.typography.bodyMedium,
                 color = Error,
                 fontWeight = FontWeight.Medium,
-                fontSize = 14.sp
+                fontSize = 13.sp
             )
         }
     }
 }
 
-// ==================== MODERN AMOUNT INPUT ====================
+// ==================== AMOUNT & LITERS CARD ====================
 
 @Composable
-fun ModernSaleAmountCard(
+fun AmountLitersCard(
     amount: String,
     onAmountChange: (String) -> Unit,
+    litersSold: Double,
+    pricePerLiter: Double,
+    fuelTypeName: String,
     enabled: Boolean
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = NeonGreen.copy(alpha = 0.15f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            .shadow(6.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // Green Accent Line
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(110.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(IconGradientGreen1, IconGradientGreen2)
-                        ),
-                        shape = RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
-                    )
-            )
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Price info row
+            if (pricePerLiter > 0) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                brush = Brush.linearGradient(
-                                    listOf(IconGradientGreen1, IconGradientGreen2)
-                                ),
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.AttachMoney,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                     Text(
-                        text = "Sale Amount",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = OnSurface,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "💰 ${if (fuelTypeName.isNotEmpty()) fuelTypeName else "Fuel"} @ KES ${String.format("%.2f", pricePerLiter)}/L",
+                        fontSize = 12.sp,
+                        color = Color(0xFF06B6D4),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // Amount and Liters side by side
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Amount Input
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "💵 Amount (KES)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF16A34A)
+                    )
+                    TextField(
+                        value = amount,
+                        onValueChange = onAmountChange,
+                        enabled = enabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF0FDF4))
+                            .border(2.dp, Color(0xFF22C55E).copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                        placeholder = {
+                            Text("0", color = TextSecondary, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        },
+                        textStyle = MaterialTheme.typography.headlineSmall.copy(
+                            color = OnSurface,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            cursorColor = Color(0xFF22C55E)
+                        )
                     )
                 }
 
-                TextField(
-                    value = amount,
-                    onValueChange = onAmountChange,
-                    enabled = enabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(LightSurfaceVariant)
-                        .border(1.5.dp, Success.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                    placeholder = {
-                        Text(
-                            "Enter amount in KES",
-                            color = TextSecondary,
-                            fontSize = 15.sp
-                        )
-                    },
-                    textStyle = MaterialTheme.typography.headlineSmall.copy(
-                        color = OnSurface,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        cursorColor = Success
+                // Liters Display
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "⛽ Liters (Auto)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2563EB)
                     )
-                )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFEFF6FF))
+                            .border(2.dp, Color(0xFF3B82F6).copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${String.format("%.2f", litersSold)} L",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2563EB)
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-// ==================== MODERN CUSTOMER DETAILS ====================
+// ==================== PAYMENT METHOD SELECTOR ====================
 
 @Composable
-fun ModernCustomerDetailsCard(
+fun PaymentMethodSelector(
+    selectedMethod: PaymentMethod,
+    onMethodSelect: (PaymentMethod) -> Unit,
+    enabled: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // M-Pesa Button
+        PaymentMethodButton(
+            emoji = "📱",
+            label = "M-Pesa",
+            isSelected = selectedMethod == PaymentMethod.MPESA,
+            enabled = enabled,
+            gradientColors = listOf(Color(0xFF22C55E), Color(0xFF16A34A)),
+            onClick = { onMethodSelect(PaymentMethod.MPESA) },
+            modifier = Modifier.weight(1f)
+        )
+
+        // Cash Button
+        PaymentMethodButton(
+            emoji = "💵",
+            label = "Cash",
+            isSelected = selectedMethod == PaymentMethod.CASH,
+            enabled = enabled,
+            gradientColors = listOf(Color(0xFFF97316), Color(0xFFEA580C)),
+            onClick = { onMethodSelect(PaymentMethod.CASH) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun PaymentMethodButton(
+    emoji: String,
+    label: String,
+    isSelected: Boolean,
+    enabled: Boolean,
+    gradientColors: List<Color>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(60.dp)
+            .shadow(if (isSelected) 8.dp else 2.dp, RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled) { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color.Transparent else Color.White
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (isSelected) {
+                        Modifier.background(
+                            brush = Brush.horizontalGradient(gradientColors)
+                        )
+                    } else {
+                        Modifier.border(2.dp, Color(0xFFE2E8F0), RoundedCornerShape(14.dp))
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(emoji, fontSize = 22.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = label,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) Color.White else OnSurface
+                )
+                if (isSelected) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==================== PHONE NUMBER INPUT ====================
+
+@Composable
+fun PhoneNumberInput(
     mobile: String,
     onMobileChange: (String) -> Unit,
     enabled: Boolean
@@ -595,186 +585,88 @@ fun ModernCustomerDetailsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = GradientPink.copy(alpha = 0.15f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            .shadow(4.dp, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // Pink Accent Line
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(110.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(IconGradientPink1, IconGradientPink2)
-                        ),
-                        shape = RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
-                    )
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                "📞 Customer Phone Number",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFDB2777)
             )
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                brush = Brush.linearGradient(
-                                    listOf(IconGradientPink1, IconGradientPink2)
-                                ),
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Phone,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Text(
-                        text = "Customer Mobile",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = OnSurface,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                TextField(
-                    value = mobile,
-                    onValueChange = onMobileChange,
-                    enabled = enabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(LightSurfaceVariant)
-                        .border(1.5.dp, GradientPink.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                    placeholder = {
-                        Text(
-                            "e.g., 0712345678",
-                            color = TextSecondary,
-                            fontSize = 15.sp
-                        )
-                    },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = OnSurface,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        cursorColor = GradientPink
-                    )
+            TextField(
+                value = mobile,
+                onValueChange = onMobileChange,
+                enabled = enabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFFDF2F8))
+                    .border(1.5.dp, Color(0xFFEC4899).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                placeholder = {
+                    Text("07XXXXXXXX", color = TextSecondary, fontSize = 15.sp)
+                },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = OnSurface,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    cursorColor = Color(0xFFEC4899)
                 )
-            }
+            )
         }
     }
 }
 
-// ==================== MODERN PAYMENT METHOD ====================
+// ==================== VALIDATION ERROR ====================
 
 @Composable
-fun ModernPaymentMethodCard() {
+fun ValidationErrorCard(message: String) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = NeonOrange.copy(alpha = 0.15f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = WarningLight),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            brush = Brush.linearGradient(
-                                listOf(IconGradientOrange1, IconGradientOrange2)
-                            ),
-                            shape = RoundedCornerShape(14.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.Payment,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-                Column {
-                    Text(
-                        text = "Payment Method",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "M-Pesa STK Push",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = OnSurface,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(Success.copy(alpha = 0.15f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    tint = Success,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            Text("⚠️", fontSize = 16.sp)
+            Text(
+                text = message,
+                color = Error,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
 
-// ==================== MODERN PAYMENT BUTTON ====================
+// ==================== MAIN PAYMENT BUTTON ====================
 
 @Composable
-fun ModernPaymentButton(
+fun MainPaymentButton(
     isProcessing: Boolean,
     isEnabled: Boolean,
+    paymentMethod: PaymentMethod,
+    pollingAttempt: Int,
+    maxAttempts: Int,
     onClick: () -> Unit
 ) {
     Button(
@@ -782,13 +674,13 @@ fun ModernPaymentButton(
         enabled = isEnabled,
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(58.dp)
             .shadow(
-                elevation = 16.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = if (isEnabled) GradientPurple.copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.2f)
+                elevation = if (isEnabled) 12.dp else 4.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = if (isEnabled) Color(0xFF7C3AED).copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.2f)
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
             disabledContainerColor = Color.Transparent
@@ -800,15 +692,21 @@ fun ModernPaymentButton(
                 .fillMaxSize()
                 .background(
                     brush = if (isEnabled) {
-                        Brush.horizontalGradient(
-                            listOf(GradientPurple, GradientCyan, GradientPink)
-                        )
+                        if (paymentMethod == PaymentMethod.MPESA) {
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF22C55E), Color(0xFF16A34A), Color(0xFF15803D))
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFFF97316), Color(0xFFEA580C), Color(0xFFC2410C))
+                            )
+                        }
                     } else {
                         Brush.horizontalGradient(
                             listOf(Color.Gray.copy(alpha = 0.4f), Color.Gray.copy(alpha = 0.3f))
                         )
                     },
-                    shape = RoundedCornerShape(18.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -820,214 +718,159 @@ fun ModernPaymentButton(
                     CircularProgressIndicator(
                         color = Color.White,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Processing... ($pollingAttempt/$maxAttempts)",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
                 } else {
-                    Icon(
-                        Icons.Rounded.Payment,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                    Text(
+                        text = if (paymentMethod == PaymentMethod.MPESA) "📱" else "💵",
+                        fontSize = 20.sp
+                    )
+                    Text(
+                        text = if (paymentMethod == PaymentMethod.MPESA) "Send M-Pesa STK Push" else "Record Cash Sale",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
                 }
-                Text(
-                    text = if (isProcessing) "Processing..." else "Initiate M-Pesa Payment",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
             }
         }
     }
 }
 
-// ==================== MODERN QUICK ACTIONS ====================
+// ==================== QUICK ACTIONS ====================
 
 @Composable
-fun ModernQuickActionButtons(
+fun QuickActionsRow(
     onClear: () -> Unit,
-    onHistory: () -> Unit,
-    onReceipt: () -> Unit
+    onRefresh: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Quick Actions",
-            style = MaterialTheme.typography.titleSmall,
-            color = OnSurface,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        QuickActionChip(
+            emoji = "🔄",
+            label = "Clear",
+            onClick = onClear,
+            modifier = Modifier.weight(1f),
+            backgroundColor = Color(0xFFFEE2E2),
+            textColor = Error
         )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            ModernQuickActionButton(
-                label = "Clear",
-                icon = Icons.Rounded.Clear,
-                gradientColors = listOf(IconGradientPink1, IconGradientPink2),
-                onClick = onClear,
-                modifier = Modifier.weight(1f)
-            )
-            ModernQuickActionButton(
-                label = "History",
-                icon = Icons.Rounded.History,
-                gradientColors = listOf(IconGradientPurple1, IconGradientPurple2),
-                onClick = onHistory,
-                modifier = Modifier.weight(1f)
-            )
-            ModernQuickActionButton(
-                label = "Receipt",
-                icon = Icons.Rounded.Receipt,
-                gradientColors = listOf(IconGradientCyan1, IconGradientCyan2),
-                onClick = onReceipt,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        QuickActionChip(
+            emoji = "♻️",
+            label = "Refresh",
+            onClick = onRefresh,
+            modifier = Modifier.weight(1f),
+            backgroundColor = Color(0xFFEFF6FF),
+            textColor = Color(0xFF2563EB)
+        )
     }
 }
 
 @Composable
-fun ModernQuickActionButton(
+fun QuickActionChip(
+    emoji: String,
     label: String,
-    icon: ImageVector,
-    gradientColors: List<Color>,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    backgroundColor: Color,
+    textColor: Color
 ) {
     Card(
         modifier = modifier
-            .shadow(
-                elevation = 6.dp,
-                shape = RoundedCornerShape(14.dp),
-                spotColor = gradientColors[0].copy(alpha = 0.2f)
-            )
+            .height(44.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor)
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .padding(14.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        brush = Brush.linearGradient(gradientColors),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            Text(emoji, fontSize = 16.sp)
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = OnSurface
+                color = textColor
             )
         }
     }
 }
 
-// ==================== MODERN MPESA INFO ====================
+// ==================== PROCESSING DIALOG ====================
 
 @Composable
-fun ModernMPesaInfoCard() {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(18.dp),
-                spotColor = NeonPurple.copy(alpha = 0.1f)
-            ),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = InfoLight),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+fun ProcessingDialog(
+    pollingAttempt: Int,
+    maxAttempts: Int
+) {
+    AlertDialog(
+        onDismissRequest = { },
+        icon = {
+            Box(
+                modifier = Modifier.size(80.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(
-                            brush = Brush.linearGradient(
-                                listOf(IconGradientBlue1, IconGradientBlue2)
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.Info,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                CircularProgressIndicator(
+                    modifier = Modifier.size(60.dp),
+                    color = Color(0xFF22C55E),
+                    strokeWidth = 4.dp
+                )
+                Text("📱", fontSize = 28.sp)
+            }
+        },
+        title = {
+            Text(
+                "Processing M-Pesa Payment",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
-                    text = "How M-Pesa Payment Works",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Info,
-                    fontWeight = FontWeight.Bold,
+                    "Please check your phone for the STK Push prompt and enter your M-Pesa PIN",
+                    textAlign = TextAlign.Center,
+                    color = TextSecondary,
                     fontSize = 14.sp
                 )
+                Text(
+                    "Checking... ($pollingAttempt/$maxAttempts)",
+                    fontSize = 12.sp,
+                    color = Color(0xFF22C55E),
+                    fontWeight = FontWeight.Medium
+                )
             }
-
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                InfoRow("STK Push will appear on customer's phone")
-                InfoRow("Customer enters their M-Pesa PIN")
-                InfoRow("Transaction completes instantly")
-                InfoRow("Receipt will be generated automatically")
-            }
-        }
-    }
+        },
+        confirmButton = {},
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
 }
 
-@Composable
-fun InfoRow(text: String) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .background(Info, CircleShape)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = OnSurface.copy(alpha = 0.8f),
-            fontSize = 12.sp
-        )
-    }
-}
-
-// ==================== MODERN SUCCESS DIALOG ====================
+// ==================== SUCCESS DIALOG ====================
 
 @Composable
-fun ModernPaymentSuccessDialog(
+fun PaymentSuccessDialog(
     message: String,
     receipt: String?,
-    checkoutRequestId: String?,
+    receiptNumber: String,
+    paymentMethod: PaymentMethod,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1038,55 +881,71 @@ fun ModernPaymentSuccessDialog(
                     .size(70.dp)
                     .background(
                         brush = Brush.linearGradient(
-                            listOf(IconGradientGreen1, IconGradientGreen2)
+                            if (paymentMethod == PaymentMethod.MPESA)
+                                listOf(Color(0xFF22C55E), Color(0xFF16A34A))
+                            else
+                                listOf(Color(0xFFF97316), Color(0xFFEA580C))
                         ),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = RoundedCornerShape(18.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(38.dp)
+                Text(
+                    if (paymentMethod == PaymentMethod.MPESA) "✅" else "💵",
+                    fontSize = 32.sp
                 )
             }
         },
         title = {
             Text(
-                "Payment Successful",
-                style = MaterialTheme.typography.headlineSmall,
+                if (paymentMethod == PaymentMethod.MPESA) "Payment Successful!" else "Cash Sale Recorded!",
                 fontWeight = FontWeight.Bold,
-                color = OnSurface
+                fontSize = 18.sp
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    textAlign = TextAlign.Center,
+                    color = OnSurface,
+                    fontSize = 14.sp
                 )
-                if (!receipt.isNullOrEmpty()) {
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SuccessLight)
+                
+                // Receipt Card
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (paymentMethod == PaymentMethod.MPESA)
+                            Color(0xFFF0FDF4) else Color(0xFFFFF7ED)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
+                        Text(
+                            "Receipt Number",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = receiptNumber,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (paymentMethod == PaymentMethod.MPESA) 
+                                Color(0xFF16A34A) else Color(0xFFEA580C)
+                        )
+                        if (!receipt.isNullOrEmpty() && paymentMethod == PaymentMethod.MPESA) {
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "M-Pesa Receipt",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
-                                fontSize = 11.sp
-                            )
-                            Text(
-                                text = receipt,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Success,
-                                fontWeight = FontWeight.Bold
+                                "M-Pesa: $receipt",
+                                fontSize = 12.sp,
+                                color = Color(0xFF22C55E),
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -1106,85 +965,45 @@ fun ModernPaymentSuccessDialog(
                         .fillMaxSize()
                         .background(
                             brush = Brush.horizontalGradient(
-                                listOf(IconGradientGreen1, IconGradientGreen2)
+                                if (paymentMethod == PaymentMethod.MPESA)
+                                    listOf(Color(0xFF22C55E), Color(0xFF16A34A))
+                                else
+                                    listOf(Color(0xFFF97316), Color(0xFFEA580C))
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Done",
+                        "✅ Done - New Sale",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 24.dp)
+                        modifier = Modifier.padding(horizontal = 20.dp)
                     )
                 }
             }
         },
-        containerColor = CardBackground,
+        containerColor = Color.White,
         shape = RoundedCornerShape(24.dp)
     )
 }
 
 // Legacy function aliases for compatibility
 @Composable
-fun SaleIdCard(saleId: String) = ModernSaleIdCard(saleId)
+fun ModernSaleIdCard(saleId: String) {
+    // Kept for compatibility - handled in header now
+}
 
 @Composable
-fun PumpSelectionCard(
-    pumps: List<Pump>,
-    selectedPump: Pump?,
-    onPumpSelect: (Pump) -> Unit
-) = ModernPumpSelectionCard(pumps, selectedPump, onPumpSelect)
-
-@Composable
-fun PumpChip(
-    pumpName: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) = ModernPumpChip(pumpName, isSelected, onClick)
-
-@Composable
-fun NoPumpsAvailableCard() = ModernNoPumpsCard()
-
-@Composable
-fun SaleAmountCard(
-    amount: String,
-    onAmountChange: (String) -> Unit,
-    enabled: Boolean
-) = ModernSaleAmountCard(amount, onAmountChange, enabled)
-
-@Composable
-fun CustomerDetailsCard(
-    mobile: String,
-    onMobileChange: (String) -> Unit,
-    enabled: Boolean
-) = ModernCustomerDetailsCard(mobile, onMobileChange, enabled)
-
-@Composable
-fun PaymentMethodCard() = ModernPaymentMethodCard()
-
-@Composable
-fun PremiumPaymentButton(
-    isProcessing: Boolean,
-    isEnabled: Boolean,
-    onClick: () -> Unit
-) = ModernPaymentButton(isProcessing, isEnabled, onClick)
-
-@Composable
-fun QuickActionButtons(
-    onClear: () -> Unit,
-    onHistory: () -> Unit,
-    onReceipt: () -> Unit
-) = ModernQuickActionButtons(onClear, onHistory, onReceipt)
-
-@Composable
-fun MPesaInfoCard() = ModernMPesaInfoCard()
-
-@Composable
-fun PaymentSuccessDialog(
+fun ModernPaymentSuccessDialog(
     message: String,
     receipt: String?,
     checkoutRequestId: String?,
     onDismiss: () -> Unit
-) = ModernPaymentSuccessDialog(message, receipt, checkoutRequestId, onDismiss)
+) = PaymentSuccessDialog(
+    message = message,
+    receipt = receipt,
+    receiptNumber = receipt ?: "",
+    paymentMethod = PaymentMethod.MPESA,
+    onDismiss = onDismiss
+)

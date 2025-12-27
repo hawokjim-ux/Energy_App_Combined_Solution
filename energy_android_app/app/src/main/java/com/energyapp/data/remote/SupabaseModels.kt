@@ -94,6 +94,27 @@ data class PumpResponse(
     @SerializedName("pump_type")
     val pumpType: String? = null,  // Nullable - may not exist in DB
     @SerializedName("is_active")
+    val isActive: Boolean = true,
+    @SerializedName("fuel_type_id")
+    val fuelTypeId: Int? = null,
+    @SerializedName("station_id")
+    val stationId: Int? = null
+)
+
+// ==================== Fuel Type Models ====================
+
+data class FuelTypeResponse(
+    @SerializedName("fuel_type_id")
+    val fuelTypeId: Int,
+    @SerializedName("fuel_name")
+    val fuelName: String,
+    @SerializedName("fuel_code")
+    val fuelCode: String? = null,
+    @SerializedName("price_per_liter")
+    val pricePerLiter: Double = 0.0,
+    @SerializedName("color_code")
+    val colorCode: String? = "#3B82F6",
+    @SerializedName("is_active")
     val isActive: Boolean = true
 )
 
