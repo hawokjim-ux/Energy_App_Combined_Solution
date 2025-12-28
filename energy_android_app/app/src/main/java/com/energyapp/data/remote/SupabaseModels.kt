@@ -257,3 +257,65 @@ data class AttendantSummary(
     @SerializedName("transaction_count")
     val transactionCount: Int
 )
+
+// ==================== Attendant Station Assignment Models ====================
+
+/**
+ * Response model for attendant_stations table
+ * Used to fetch user's assigned station, pump, and permissions
+ */
+data class AttendantStationResponse(
+    @SerializedName("id")
+    val id: Int,
+    @SerializedName("attendant_id")
+    val attendantId: Int,
+    @SerializedName("station_id")
+    val stationId: Int,
+    @SerializedName("station_role")
+    val stationRole: String? = "attendant",
+    @SerializedName("can_view_own_sales")
+    val canViewOwnSales: Boolean = true,
+    @SerializedName("can_process_sales")
+    val canProcessSales: Boolean = true,
+    @SerializedName("can_manage_shift")
+    val canManageShift: Boolean = false,
+    @SerializedName("is_primary_station")
+    val isPrimaryStation: Boolean = false,
+    @SerializedName("assigned_at")
+    val assignedAt: String? = null,
+    @SerializedName("is_active")
+    val isActive: Boolean = true
+)
+
+/**
+ * Station response model
+ */
+data class StationResponse(
+    @SerializedName("station_id")
+    val stationId: Int,
+    @SerializedName("station_code")
+    val stationCode: String,
+    @SerializedName("station_name")
+    val stationName: String,
+    @SerializedName("physical_address")
+    val physicalAddress: String? = null,
+    @SerializedName("city")
+    val city: String? = null,
+    @SerializedName("is_active")
+    val isActive: Boolean = true
+)
+
+/**
+ * Combined user assignment with station details
+ * Used after login to provide user with their assigned station info
+ */
+data class UserStationAssignment(
+    val userId: Int,
+    val stationId: Int,
+    val stationName: String,
+    val stationCode: String,
+    val stationRole: String,
+    val canProcessSales: Boolean,
+    val canManageShift: Boolean,
+    val isPrimaryStation: Boolean
+)

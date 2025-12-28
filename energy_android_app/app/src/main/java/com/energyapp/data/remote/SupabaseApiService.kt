@@ -108,6 +108,31 @@ interface SupabaseApi {
         @Body request: CloseShiftRequest
     ): List<PumpShiftResponse>
 
+    // ==================== Stations ====================
+    @GET("stations")
+    suspend fun getStations(
+        @Query("is_active") isActive: String = "eq.true"
+    ): List<StationResponse>
+
+    @GET("stations")
+    suspend fun getStationById(
+        @Query("station_id") stationId: String
+    ): List<StationResponse>
+
+    // ==================== Attendant Station Assignments ====================
+    @GET("attendant_stations")
+    suspend fun getAttendantStations(
+        @Query("attendant_id") attendantId: String,
+        @Query("is_active") isActive: String = "eq.true"
+    ): List<AttendantStationResponse>
+
+    @GET("attendant_stations")
+    suspend fun getAttendantPrimaryStation(
+        @Query("attendant_id") attendantId: String,
+        @Query("is_primary_station") isPrimary: String = "eq.true",
+        @Query("is_active") isActive: String = "eq.true"
+    ): List<AttendantStationResponse>
+
     // FIXED: Changed from sales_records to sales
     @GET("sales")
     suspend fun getAllSales(
@@ -530,11 +555,119 @@ class SupabaseApiService @Inject constructor(
         }
     }
 
+    // ==================== Stations ====================
+    suspend fun getStations(): Result<List<StationResponse>> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🏪 Fetching stations...")
+            val stations = api.getStations()
+            Log.d(TAG, "✅ Retrieved ${stations.size} stations")
+            Result.success(stations)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching stations: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getStationById(stationId: Int): Result<StationResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🏪 Fetching station: $stationId")
+            val stations = api.getStationById("eq.$stationId")
+            if (stations.isNotEmpty()) {
+                Result.success(stations.first())
+            } else {
+                Result.failure(Exception("Station not found"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching station: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // ==================== Attendant Station Assignments ====================
+    /**
+     * Get all stations assigned to an attendant
+     */
+    suspend fun getAttendantStations(attendantId: Int): Result<List<AttendantStationResponse>> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔗 Fetching station assignments for attendant: $attendantId")
+            val assignments = api.getAttendantStations("eq.$attendantId")
+            Log.d(TAG, "✅ Retrieved ${assignments.size} station assignments")
+            Result.success(assignments)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching attendant stations: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get the primary station assignment for an attendant
+     */
+    suspend fun getAttendantPrimaryStation(attendantId: Int): Result<AttendantStationResponse?> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔗 Fetching primary station for attendant: $attendantId")
+            val assignments = api.getAttendantPrimaryStation("eq.$attendantId")
+            if (assignments.isNotEmpty()) {
+                Log.d(TAG, "✅ Found primary station: ${assignments.first().stationId}")
+                Result.success(assignments.first())
+            } else {
+                // Try to get any active assignment if no primary
+                val allAssignments = api.getAttendantStations("eq.$attendantId")
+                if (allAssignments.isNotEmpty()) {
+                    Log.d(TAG, "✅ Found station assignment (not primary): ${allAssignments.first().stationId}")
+                    Result.success(allAssignments.first())
+                } else {
+                    Log.d(TAG, "⚠️ No station assignment found for attendant")
+                    Result.success(null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching primary station: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get full user station assignment details (with station info)
+     */
+    suspend fun getUserStationAssignment(userId: Int): Result<UserStationAssignment?> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔗 Fetching full station assignment for user: $userId")
+            
+            // Get the user's station assignment
+            val assignmentResult = getAttendantPrimaryStation(userId)
+            val assignment = assignmentResult.getOrNull() ?: return@withContext Result.success(null)
+            
+            // Get the station details
+            val stationResult = getStationById(assignment.stationId)
+            val station = stationResult.getOrNull() ?: return@withContext Result.success(null)
+            
+            // Build the full assignment object
+            val userAssignment = UserStationAssignment(
+                userId = userId,
+                stationId = station.stationId,
+                stationName = station.stationName,
+                stationCode = station.stationCode,
+                stationRole = assignment.stationRole ?: "attendant",
+                canProcessSales = assignment.canProcessSales,
+                canManageShift = assignment.canManageShift,
+                isPrimaryStation = assignment.isPrimaryStation
+            )
+            
+            Log.d(TAG, "✅ User assignment: ${station.stationName} (${station.stationCode})")
+            Result.success(userAssignment)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching user station assignment: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     // ==================== Sales Methods ====================
     suspend fun createSale(request: CreateSaleRequest): Result<SaleResponse> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "📝 Creating sale record: ${request.saleIdNo}")
-            val saleRecord = mapOf<String, Any>(
+            
+            // Build sale record with ALL fields matching web app exactly
+            val saleRecord = mutableMapOf<String, Any>(
                 "sale_id_no" to request.saleIdNo,
                 "pump_shift_id" to request.pumpShiftId,
                 "pump_id" to request.pumpId,
@@ -542,8 +675,34 @@ class SupabaseApiService @Inject constructor(
                 "amount" to request.amount,
                 "customer_mobile_no" to request.customerMobileNo,
                 "transaction_status" to request.transactionStatus,
-                "checkout_request_id" to (request.checkoutRequestId ?: "")
+                // Station and fuel details
+                "station_id" to request.stationId,
+                // Detailed sale fields (matching web app)
+                "liters_sold" to request.litersSold,
+                "price_per_liter" to request.pricePerLiter,
+                "total_amount" to request.totalAmount,
+                "payment_method" to request.paymentMethod
             )
+            
+            // Add optional fields if not null/blank
+            request.checkoutRequestId?.takeIf { it.isNotBlank() }?.let { 
+                saleRecord["checkout_request_id"] = it 
+            }
+            request.fuelTypeId?.let { 
+                saleRecord["fuel_type_id"] = it 
+            }
+            request.saleTime?.takeIf { it.isNotBlank() }?.let { 
+                saleRecord["sale_time"] = it 
+            }
+            request.mpesaTransactionId?.takeIf { it.isNotBlank() }?.let { 
+                saleRecord["mpesa_transaction_id"] = it 
+            }
+            request.mpesaReceiptNumber?.takeIf { it.isNotBlank() }?.let { 
+                saleRecord["mpesa_receipt_number"] = it 
+            }
+            
+            Log.d(TAG, "📤 Sale record fields: ${saleRecord.keys.joinToString()}")
+            
             val sales = api.createSale(saleRecord)
             if (sales.isNotEmpty()) {
                 Log.d(TAG, "✅ Sale record created with ID: ${sales.first().saleId}")

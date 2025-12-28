@@ -41,7 +41,7 @@ enum class PaymentMethod {
 
 /**
  * UI State for Sales Screen - Modern Compact Design
- * Now includes logged-in user info and shift details
+ * Now includes logged-in user info, shift details, and station assignment
  */
 data class SalesUiState(
     val pumps: List<Pump> = emptyList(),
@@ -66,7 +66,12 @@ data class SalesUiState(
     // User and Shift info for display
     val loggedInUserName: String = "",   // Logged-in user's full name
     val loggedInUserId: Int = 0,         // Logged-in user's ID
-    val currentShiftName: String = ""    // Current shift name (from selected pump)
+    val currentShiftName: String = "",   // Current shift name (from selected pump)
+    // Station Assignment info (from attendant_stations table)
+    val assignedStationId: Int = 1,      // User's assigned station ID (default to 1)
+    val assignedStationName: String = "", // Station name for display
+    val assignedStationCode: String = "", // Station code (e.g., STN-001)
+    val hasStationAssignment: Boolean = false // Whether user has a valid assignment
 )
 
 /**
@@ -112,17 +117,38 @@ class SalesViewModel @Inject constructor(
     }
 
     /**
-     * Load pumps, fuel types, shifts, and user info together
+     * Load pumps, fuel types, shifts, user station assignment together
      */
     private fun loadData() {
         viewModelScope.launch {
             try {
-                // Load all data in parallel
+                // Load all base data in parallel
                 val fuelTypesResult = supabaseApiService.getFuelTypes()
                 val fuelTypes = fuelTypesResult.getOrNull() ?: emptyList()
                 
                 val shiftsResult = supabaseApiService.getShifts()
                 val shifts = shiftsResult.getOrNull() ?: emptyList()
+                
+                // Load user's station assignment (from attendant_stations table)
+                var assignedStationId = 1 // Default fallback
+                var assignedStationName = ""
+                var assignedStationCode = ""
+                var hasAssignment = false
+                
+                if (userId > 0) {
+                    Log.d(TAG, "🔗 Loading station assignment for user: $userId")
+                    val assignmentResult = supabaseApiService.getUserStationAssignment(userId)
+                    val assignment = assignmentResult.getOrNull()
+                    if (assignment != null) {
+                        assignedStationId = assignment.stationId
+                        assignedStationName = assignment.stationName
+                        assignedStationCode = assignment.stationCode
+                        hasAssignment = true
+                        Log.d(TAG, "✅ User assigned to station: ${assignment.stationName} (ID: ${assignment.stationId})")
+                    } else {
+                        Log.w(TAG, "⚠️ No station assignment found for user $userId, using default station 1")
+                    }
+                }
                 
                 // Load pumps
                 val pumpsResult = supabaseApiService.getPumps()
@@ -131,8 +157,8 @@ class SalesViewModel @Inject constructor(
                     val openShiftsResult = supabaseApiService.getOpenShifts()
                     val openShifts = openShiftsResult.getOrNull() ?: emptyList()
 
-                    // Build pump list with full info
-                    val pumps = pumpResponses.mapNotNull { pumpResponse ->
+                    // Build pump list with full info - filter by assigned station
+                    val allPumps = pumpResponses.mapNotNull { pumpResponse ->
                         // Find open shift for this pump
                         val openShift = openShifts.find { it.pumpId == pumpResponse.pumpId && !it.isClosed }
                         if (openShift != null) {
@@ -154,6 +180,19 @@ class SalesViewModel @Inject constructor(
                             )
                         } else null
                     }
+                    
+                    // Filter pumps by assigned station if user has assignment
+                    // For now, show all pumps (station filter can be added when pumps have station_id)
+                    val pumps = if (hasAssignment) {
+                        // Filter pumps by station_id if available in pump response
+                        allPumps.filter { pump -> 
+                            // Check if pump belongs to assigned station
+                            val pumpResponse = pumpResponses.find { it.pumpId == pump.pumpId }
+                            pumpResponse?.stationId == null || pumpResponse.stationId == assignedStationId
+                        }
+                    } else {
+                        allPumps
+                    }
 
                     // Get current sales count for receipt number
                     val salesResult = supabaseApiService.getAllSales()
@@ -168,13 +207,18 @@ class SalesViewModel @Inject constructor(
                         fuelTypes = fuelTypes,
                         pricePerLiter = pumps.firstOrNull()?.pricePerLiter ?: fuelTypes.firstOrNull()?.pricePerLiter ?: 0.0,
                         salesCount = salesCount,
-                        currentShiftName = currentShift
+                        currentShiftName = currentShift,
+                        // Station assignment
+                        assignedStationId = assignedStationId,
+                        assignedStationName = assignedStationName,
+                        assignedStationCode = assignedStationCode,
+                        hasStationAssignment = hasAssignment
                     )
                     
                     generateReceiptNumber(salesCount)
 
                     Log.d(TAG, "✅ Loaded ${pumps.size} pumps, ${fuelTypes.size} fuel types, ${shifts.size} shifts")
-                    Log.d(TAG, "✅ Current shift: $currentShift, User: ${_uiState.value.loggedInUserName}")
+                    Log.d(TAG, "✅ Station: $assignedStationName, Shift: $currentShift, User: ${_uiState.value.loggedInUserName}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to load data: ${e.message}")
@@ -332,8 +376,8 @@ class SalesViewModel @Inject constructor(
                         attendantId = userId,
                         amount = amount,
                         customerMobileNo = _uiState.value.customerMobile.ifEmpty { "CASH" },
-                        transactionStatus = "CASH",  // CASH instead of SUCCESS
-                        stationId = 1,
+                        transactionStatus = "CASH",  // CASH instead of SUCCESS (matching web app)
+                        stationId = _uiState.value.assignedStationId,  // Use assigned station from DB
                         fuelTypeId = pump.fuelTypeId,
                         litersSold = litersSold,
                         pricePerLiter = pricePerLiter,
