@@ -82,7 +82,8 @@ fun SalesScreen(
                     AttendantInfoCard(
                         userName = uiState.loggedInUserName,
                         shiftName = uiState.currentShiftName,
-                        pumpName = uiState.selectedPump?.pumpName ?: ""
+                        pumpName = uiState.selectedPump?.pumpName ?: "",
+                        stationName = uiState.assignedStationName
                     )
                 }
 
@@ -293,7 +294,8 @@ fun LightHeader(
 fun AttendantInfoCard(
     userName: String,
     shiftName: String,
-    pumpName: String
+    pumpName: String,
+    stationName: String = ""
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -301,56 +303,84 @@ fun AttendantInfoCard(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(Color(0xFF10B981).copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("👤", fontSize = 20.sp)
-                }
-                Column {
-                    Text(
-                        text = if (userName.isNotEmpty()) userName else "Attendant",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
-                    )
-                    if (pumpName.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .background(Color(0xFF10B981).copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("👤", fontSize = 20.sp)
+                    }
+                    Column {
                         Text(
-                            text = "📍 $pumpName",
+                            text = if (userName.isNotEmpty()) userName else "Attendant",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                        if (pumpName.isNotEmpty()) {
+                            Text(
+                                text = "⛽ $pumpName",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+                
+                if (shiftName.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = Color(0xFF0EA5E9).copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "🕐 $shiftName",
                             fontSize = 12.sp,
-                            color = Color(0xFF64748B)
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF0284C7)
                         )
                     }
                 }
             }
             
-            if (shiftName.isNotEmpty()) {
-                Box(
+            // Station Info Row
+            if (stationName.isNotEmpty()) {
+                Row(
                     modifier = Modifier
+                        .fillMaxWidth()
                         .background(
-                            color = Color(0xFF0EA5E9).copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(10.dp)
+                            color = Color(0xFFF59E0B).copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
                         )
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Text("🏪", fontSize = 16.sp)
                     Text(
-                        text = "🕐 $shiftName",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0284C7)
+                        text = stationName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFB45309)
                     )
                 }
             }
