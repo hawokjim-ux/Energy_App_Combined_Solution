@@ -35,6 +35,8 @@ data class MpesaStkRequest(
     val pumpId: String? = null,
     @SerializedName("shift_id")
     val shiftId: String? = null,
+    @SerializedName("station_id")
+    val stationId: String? = null,  // Pass assigned station to PHP backend
     @SerializedName("fuel_type")
     val fuelType: String? = null,
     @SerializedName("quantity")
