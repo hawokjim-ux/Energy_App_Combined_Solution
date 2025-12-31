@@ -43,6 +43,31 @@ enum class PaymentMethod {
 }
 
 /**
+ * Represents a pending M-Pesa transaction that's processing in the background
+ */
+data class PendingTransaction(
+    val checkoutRequestId: String,
+    val saleId: String?,
+    val phoneNumber: String,
+    val amount: Double,
+    val pumpName: String,
+    val startTime: Long = System.currentTimeMillis(),
+    val status: PendingStatus = PendingStatus.WAITING_FOR_PIN,
+    val lastChecked: Long = 0L,
+    val receiptNumber: String? = null,
+    val errorMessage: String? = null
+)
+
+enum class PendingStatus {
+    WAITING_FOR_PIN,    // Customer hasn't entered PIN yet
+    PROCESSING,         // PIN entered, waiting for Safaricom
+    COMPLETED,          // Payment successful
+    CANCELLED,          // Customer cancelled
+    FAILED,             // Payment failed
+    TIMEOUT             // Timed out waiting
+}
+
+/**
  * UI State for Sales Screen - Modern Compact Design
  * Now includes logged-in user info, shift details, and station assignment
  */
@@ -74,7 +99,11 @@ data class SalesUiState(
     val assignedStationId: Int = 1,      // User's assigned station ID (default to 1)
     val assignedStationName: String = "", // Station name for display
     val assignedStationCode: String = "", // Station code (e.g., STN-001)
-    val hasStationAssignment: Boolean = false // Whether user has a valid assignment
+    val hasStationAssignment: Boolean = false, // Whether user has a valid assignment
+    // Background/Pending Transactions Queue
+    val pendingTransactions: List<PendingTransaction> = emptyList(),
+    val showPendingDialog: Boolean = false,
+    val selectedPendingTransaction: PendingTransaction? = null
 )
 
 /**
@@ -101,9 +130,13 @@ class SalesViewModel @Inject constructor(
     
     // Track payment start time for performance measurement
     private var paymentStartTime: Long = 0L
+    
+    // Background job to check pending transactions
+    private var backgroundPollingJob: Job? = null
 
     init {
         loadData()
+        startBackgroundPolling()
     }
 
     fun setUserId(id: Int) {
@@ -868,6 +901,7 @@ class SalesViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         realtimeJob?.cancel()
+        backgroundPollingJob?.cancel()
         supabaseRealtimeService.disconnect()
         Log.d(TAG, "🧹 ViewModel cleared, realtime disconnected")
     }
@@ -886,5 +920,257 @@ class SalesViewModel @Inject constructor(
      */
     fun refresh() {
         loadData()
+    }
+    
+    // ==================== PENDING TRANSACTIONS MANAGEMENT ====================
+    
+    /**
+     * Move current transaction to background and allow serving next customer
+     * This is the key function to prevent queues at the station!
+     */
+    fun moveToBackground() {
+        val checkoutId = _uiState.value.checkoutRequestId ?: return
+        val pump = _uiState.value.selectedPump ?: return
+        val amount = _uiState.value.amount.toDoubleOrNull() ?: 0.0
+        val phone = _uiState.value.customerMobile
+        
+        Log.d(TAG, "📦 Moving transaction to background: $checkoutId")
+        
+        val pendingTransaction = PendingTransaction(
+            checkoutRequestId = checkoutId,
+            saleId = _uiState.value.saleId,
+            phoneNumber = phone,
+            amount = amount,
+            pumpName = pump.pumpName,
+            startTime = paymentStartTime
+        )
+        
+        val updatedPending = _uiState.value.pendingTransactions + pendingTransaction
+        
+        _uiState.value = _uiState.value.copy(
+            isProcessing = false,
+            pendingTransactions = updatedPending,
+            // Reset form for next customer
+            amount = "",
+            customerMobile = "",
+            litersSold = 0.0,
+            checkoutRequestId = null,
+            saleId = null,
+            error = null,
+            successMessage = "⏳ Payment moved to background. Serve next customer!"
+        )
+        
+        Log.d(TAG, "✅ Transaction moved to background. Pending count: ${updatedPending.size}")
+    }
+    
+    /**
+     * Resend STK Push for a pending transaction that was cancelled
+     */
+    fun resendStkPush(transaction: PendingTransaction) {
+        Log.d(TAG, "🔄 Resending STK Push for: ${transaction.checkoutRequestId}")
+        
+        viewModelScope.launch {
+            try {
+                // Remove old pending transaction
+                val updatedPending = _uiState.value.pendingTransactions.filter { 
+                    it.checkoutRequestId != transaction.checkoutRequestId 
+                }
+                _uiState.value = _uiState.value.copy(pendingTransactions = updatedPending)
+                
+                // Set up for new STK push
+                _uiState.value = _uiState.value.copy(
+                    customerMobile = transaction.phoneNumber,
+                    amount = transaction.amount.toString(),
+                    isProcessing = true
+                )
+                
+                paymentStartTime = System.currentTimeMillis()
+                
+                val stkResponse = mpesaBackendService.initiateStkPush(
+                    MpesaStkRequest(
+                        amount = transaction.amount,
+                        phone = transaction.phoneNumber,
+                        account = "RESEND",
+                        description = "Fuel - ${transaction.pumpName}",
+                        stationId = _uiState.value.assignedStationId.toString()
+                    )
+                )
+                
+                if (stkResponse.success && stkResponse.checkoutRequestID != null) {
+                    // Add new pending transaction
+                    val newPending = PendingTransaction(
+                        checkoutRequestId = stkResponse.checkoutRequestID,
+                        saleId = stkResponse.saleId,
+                        phoneNumber = transaction.phoneNumber,
+                        amount = transaction.amount,
+                        pumpName = transaction.pumpName,
+                        startTime = System.currentTimeMillis()
+                    )
+                    
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        pendingTransactions = _uiState.value.pendingTransactions + newPending,
+                        successMessage = "📱 STK Push resent! Check customer's phone."
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        error = "Failed to resend: ${stkResponse.message}"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Resend error: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    error = "Resend failed: ${e.message}"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Start background polling for all pending transactions
+     */
+    private fun startBackgroundPolling() {
+        backgroundPollingJob?.cancel()
+        backgroundPollingJob = viewModelScope.launch {
+            while (true) {
+                delay(5000) // Check every 5 seconds
+                
+                val pending = _uiState.value.pendingTransactions
+                if (pending.isEmpty()) continue
+                
+                Log.d(TAG, "🔄 Background checking ${pending.size} pending transactions...")
+                
+                pending.forEach { transaction ->
+                    if (transaction.status == PendingStatus.WAITING_FOR_PIN || 
+                        transaction.status == PendingStatus.PROCESSING) {
+                        checkPendingTransactionStatus(transaction)
+                    }
+                }
+                
+                // Clean up old completed/failed transactions (older than 5 minutes)
+                val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000)
+                val cleanedPending = _uiState.value.pendingTransactions.filter { tx ->
+                    when (tx.status) {
+                        PendingStatus.COMPLETED, PendingStatus.FAILED, 
+                        PendingStatus.CANCELLED, PendingStatus.TIMEOUT -> {
+                            tx.lastChecked > fiveMinutesAgo
+                        }
+                        else -> true
+                    }
+                }
+                
+                if (cleanedPending.size != _uiState.value.pendingTransactions.size) {
+                    _uiState.value = _uiState.value.copy(pendingTransactions = cleanedPending)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Check status of a single pending transaction
+     */
+    private suspend fun checkPendingTransactionStatus(transaction: PendingTransaction) {
+        try {
+            val statusResult = mpesaBackendService.checkTransactionStatus(transaction.checkoutRequestId)
+            
+            val updatedTransaction = when (statusResult.resultCode) {
+                0 -> {
+                    Log.d(TAG, "✅ Background: Payment successful for ${transaction.checkoutRequestId}")
+                    transaction.copy(
+                        status = PendingStatus.COMPLETED,
+                        receiptNumber = statusResult.mpesaReceiptNumber,
+                        lastChecked = System.currentTimeMillis()
+                    )
+                }
+                1032 -> {
+                    Log.d(TAG, "❌ Background: Payment cancelled for ${transaction.checkoutRequestId}")
+                    transaction.copy(
+                        status = PendingStatus.CANCELLED,
+                        errorMessage = "Customer cancelled",
+                        lastChecked = System.currentTimeMillis()
+                    )
+                }
+                1, 1037 -> {
+                    transaction.copy(
+                        status = PendingStatus.FAILED,
+                        errorMessage = statusResult.resultDesc ?: "Payment failed",
+                        lastChecked = System.currentTimeMillis()
+                    )
+                }
+                null -> {
+                    // Still pending - check if timed out (2 minutes)
+                    val elapsed = System.currentTimeMillis() - transaction.startTime
+                    if (elapsed > 120000) {
+                        transaction.copy(
+                            status = PendingStatus.TIMEOUT,
+                            errorMessage = "Timed out waiting for customer",
+                            lastChecked = System.currentTimeMillis()
+                        )
+                    } else {
+                        transaction.copy(lastChecked = System.currentTimeMillis())
+                    }
+                }
+                else -> transaction.copy(
+                    status = PendingStatus.FAILED,
+                    errorMessage = statusResult.resultDesc,
+                    lastChecked = System.currentTimeMillis()
+                )
+            }
+            
+            // Update transactions list
+            val updatedList = _uiState.value.pendingTransactions.map { tx ->
+                if (tx.checkoutRequestId == transaction.checkoutRequestId) updatedTransaction else tx
+            }
+            _uiState.value = _uiState.value.copy(pendingTransactions = updatedList)
+            
+            // Update sale in database if completed
+            if (updatedTransaction.status == PendingStatus.COMPLETED) {
+                transaction.saleId?.toIntOrNull()?.let { id ->
+                    try {
+                        supabaseApiService.updateSaleTransactionStatus(
+                            id, "SUCCESS", statusResult.mpesaReceiptNumber
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "⚠️ Failed to update sale: ${e.message}")
+                    }
+                }
+                
+                _uiState.value = _uiState.value.copy(
+                    salesCount = _uiState.value.salesCount + 1
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Background status check error: ${e.message}")
+        }
+    }
+    
+    /**
+     * Show/hide pending transactions dialog
+     */
+    fun togglePendingDialog() {
+        _uiState.value = _uiState.value.copy(
+            showPendingDialog = !_uiState.value.showPendingDialog
+        )
+    }
+    
+    /**
+     * Remove a pending transaction from the list
+     */
+    fun removePendingTransaction(checkoutRequestId: String) {
+        val updatedPending = _uiState.value.pendingTransactions.filter { 
+            it.checkoutRequestId != checkoutRequestId 
+        }
+        _uiState.value = _uiState.value.copy(pendingTransactions = updatedPending)
+    }
+    
+    /**
+     * Get count of active pending transactions
+     */
+    fun getPendingCount(): Int {
+        return _uiState.value.pendingTransactions.count { 
+            it.status == PendingStatus.WAITING_FOR_PIN || it.status == PendingStatus.PROCESSING 
+        }
     }
 }
