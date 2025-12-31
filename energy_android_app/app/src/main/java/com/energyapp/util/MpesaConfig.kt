@@ -8,18 +8,21 @@ object MpesaConfig {
     const val SUPABASE_URL = "https://pxcdaivlvltmdifxietb.supabase.co"
     const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2RhaXZsdmx0bWRpZnhpZXRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NDI3NDIsImV4cCI6MjA4MTMxODc0Mn0.s6nv24s6M83gAcW_nSKCBfcXcqJ_7owwqdObPDT7Ky0"
 
-    // *** CRITICAL CHANGE: RENDER BASE URL ADDED ***
+    // *** SUPABASE EDGE FUNCTIONS (NO COLD STARTS!) ***
+    const val SUPABASE_FUNCTIONS_URL = "${SUPABASE_URL}/functions/v1/"
+    
+    // *** EDGE FUNCTION ENDPOINTS ***
+    const val STK_PUSH_ENDPOINT = "${SUPABASE_FUNCTIONS_URL}stkpush"
+    const val CHECK_STATUS_ENDPOINT = "${SUPABASE_FUNCTIONS_URL}check-status"
+    const val CALLBACK_ENDPOINT = "${SUPABASE_FUNCTIONS_URL}callback"
+    
+    // Legacy Render URL (kept for reference, no longer used)
     const val RENDER_BASE_URL = "https://online-link.onrender.com/"
-
-    // *** ENDPOINT UPDATES: POINTING TO RENDER PHP FILES ***
-    const val STK_PUSH_ENDPOINT = "${RENDER_BASE_URL}stkpush.php"
-    const val CHECK_STATUS_ENDPOINT = "${RENDER_BASE_URL}check_status.php"
-    const val CALLBACK_ENDPOINT = "${RENDER_BASE_URL}callback.php" // Still used by M-Pesa, but kept for reference
 
     const val STK_PUSH_TIMEOUT = 30
     const val POLLING_TIMEOUT = 120
-    const val POLLING_INTERVAL = 5000
-    const val MAX_POLLING_ATTEMPTS = 24
+    const val POLLING_INTERVAL = 3000  // Faster polling (3 seconds)
+    const val MAX_POLLING_ATTEMPTS = 20
 
     fun isValidKenyanPhone(phone: String): Boolean {
         val cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").trim()

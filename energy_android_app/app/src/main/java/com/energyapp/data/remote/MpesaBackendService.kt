@@ -123,44 +123,43 @@ data class TransactionListResponse(
     val pagination: PaginationInfo
 )
 
-// ==================== RETROFIT INTERFACE (Updated for Render PHP) ====================
+// ==================== RETROFIT INTERFACE (Supabase Edge Functions) ====================
 
-interface IMpesaBackendApi { // Renamed from ISupabaseMpesaApi for clarity
+interface IMpesaBackendApi {
 
     /**
      * Initiate M-Pesa STK Push
-     * POST /stkpush.php
-     * Removed Supabase API key/Authorization headers as PHP is a direct REST service.
+     * POST /stkpush (Supabase Edge Function)
      */
-    @POST("stkpush.php")
+    @POST("stkpush")
     suspend fun initiateStkPush(
         @Body request: MpesaStkRequest
     ): MpesaStkResponse
 
     /**
      * Check transaction status
-     * GET /check_status.php?checkout_request_id={id}
-     * Removed Supabase API key/Authorization headers.
+     * GET /check-status?checkout_request_id={id}
      */
-    @GET("check_status.php")
+    @GET("check-status")
     suspend fun checkStatus(
         @Query("checkout_request_id") checkoutRequestId: String
     ): MpesaStatusResponse
 }
 
-// ==================== M-PESA BACKEND SERVICE (Updated Base URL) ====================
+// ==================== M-PESA BACKEND SERVICE (Supabase Edge Functions) ====================
 
 /**
- * Service for communicating with the Render PHP Backend for M-Pesa integration
+ * Service for communicating with Supabase Edge Functions for M-Pesa integration
+ * NO COLD STARTS - Fast response times!
  */
 @Singleton
 class MpesaBackendService @Inject constructor() {
 
     private val TAG = "MpesaBackendService"
-    private val api: IMpesaBackendApi // Changed interface name
+    private val api: IMpesaBackendApi
 
     init {
-        Log.d(TAG, "🔧 Initializing MpesaBackendService (Render PHP Backend)...")
+        Log.d(TAG, "🔧 Initializing MpesaBackendService (Supabase Edge Functions)...")
 
         val loggingInterceptor = HttpLoggingInterceptor { message ->
             Log.d(TAG, "HTTP: $message")
@@ -180,8 +179,8 @@ class MpesaBackendService @Inject constructor() {
             .create()
 
         val retrofit = Retrofit.Builder()
-            // *** CRITICAL CHANGE: Using the Render Base URL ***
-            .baseUrl(MpesaConfig.RENDER_BASE_URL)
+            // *** USING SUPABASE EDGE FUNCTIONS (NO COLD STARTS!) ***
+            .baseUrl(MpesaConfig.SUPABASE_FUNCTIONS_URL)
             .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
@@ -189,16 +188,16 @@ class MpesaBackendService @Inject constructor() {
         api = retrofit.create(IMpesaBackendApi::class.java)
 
         Log.d(TAG, "✅ MpesaBackendService initialized")
-        Log.d(TAG, "🌐 Render URL: ${MpesaConfig.RENDER_BASE_URL}")
-        Log.d(TAG, "🔐 Using PRODUCTION M-Pesa API")
+        Log.d(TAG, "🌐 Supabase Functions URL: ${MpesaConfig.SUPABASE_FUNCTIONS_URL}")
+        Log.d(TAG, "⚡ NO COLD STARTS - Edge Functions ready!")
     }
 
     /**
-     * Initiate STK Push via Render PHP Backend
+     * Initiate STK Push via Supabase Edge Functions
      */
     suspend fun initiateStkPush(request: MpesaStkRequest): MpesaStkResponse {
         return try {
-            Log.d(TAG, "🚀 Initiating STK Push via Render PHP Backend...")
+            Log.d(TAG, "🚀 Initiating STK Push via Supabase Edge Functions...")
             Log.d(TAG, "📱 Phone: ${request.phone}, Amount: ${request.amount}")
 
             // Removed Supabase Headers
@@ -229,11 +228,11 @@ class MpesaBackendService @Inject constructor() {
     }
 
     /**
-     * Check transaction status via Render PHP Backend
+     * Check transaction status via Supabase Edge Functions
      */
     suspend fun checkTransactionStatus(checkoutRequestId: String): MpesaStatusResponse {
         return try {
-            Log.d(TAG, "🔍 Checking transaction status...")
+            Log.d(TAG, "🔍 Checking transaction status via Edge Functions...")
             Log.d(TAG, "🎫 CheckoutRequestID: $checkoutRequestId")
 
             // Removed Supabase Headers
