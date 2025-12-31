@@ -87,12 +87,16 @@ fun SalesScreen(
                     )
                 }
 
-                // Pump Selection
-                PumpSelectorCard(
-                    pumps = uiState.pumps,
-                    selectedPump = uiState.selectedPump,
-                    onPumpSelect = viewModel::selectPump
-                )
+                // Pending Transactions Badge (if any)
+                if (uiState.pendingTransactions.isNotEmpty()) {
+                    PendingTransactionsBadge(
+                        pendingCount = uiState.pendingTransactions.count { 
+                            it.status == PendingStatus.WAITING_FOR_PIN || it.status == PendingStatus.PROCESSING 
+                        },
+                        completedCount = uiState.pendingTransactions.count { it.status == PendingStatus.COMPLETED },
+                        onClick = { viewModel.togglePendingDialog() }
+                    )
+                }
 
                 if (uiState.pumps.isEmpty()) {
                     NoPumpsWarning()
@@ -153,11 +157,22 @@ fun SalesScreen(
         }
     }
 
-    // Processing Dialog
+    // Processing Dialog with Move to Background
     if (uiState.isProcessing && uiState.paymentMethod == PaymentMethod.MPESA) {
         MpesaProcessingDialog(
             pollingAttempt = uiState.pollingAttempt,
-            maxAttempts = uiState.maxPollingAttempts
+            maxAttempts = uiState.maxPollingAttempts,
+            onMoveToBackground = viewModel::moveToBackground
+        )
+    }
+    
+    // Pending Transactions Dialog
+    if (uiState.showPendingDialog) {
+        PendingTransactionsDialog(
+            transactions = uiState.pendingTransactions,
+            onDismiss = { viewModel.togglePendingDialog() },
+            onResend = { viewModel.resendStkPush(it) },
+            onRemove = { viewModel.removePendingTransaction(it.checkoutRequestId) }
         )
     }
 
@@ -946,7 +961,8 @@ fun ActionButton(
 @Composable
 fun MpesaProcessingDialog(
     pollingAttempt: Int,
-    maxAttempts: Int
+    maxAttempts: Int,
+    onMoveToBackground: () -> Unit = {}
 ) {
     AlertDialog(
         onDismissRequest = { },
@@ -987,6 +1003,31 @@ fun MpesaProcessingDialog(
                     fontSize = 12.sp,
                     color = Color(0xFF10B981),
                     fontWeight = FontWeight.Medium
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Move to Background Button - Key feature to prevent queues!
+                Button(
+                    onClick = onMoveToBackground,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF59E0B)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "⏳ Move to Background - Serve Next Customer",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Text(
+                    "Transaction will continue in background",
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8),
+                    textAlign = TextAlign.Center
                 )
             }
         },
@@ -1202,3 +1243,226 @@ fun AmountLitersCard(
     fuelTypeName: String,
     enabled: Boolean
 ) = AmountLitersSection(amount, onAmountChange, litersSold, enabled)
+
+// ==================== PENDING TRANSACTIONS ====================
+
+@Composable
+fun PendingTransactionsBadge(
+    pendingCount: Int,
+    completedCount: Int,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (completedCount > 0) Color(0xFFDCFCE7) else Color(0xFFFEF3C7)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    if (completedCount > 0) "✅" else "⏳",
+                    fontSize = 24.sp
+                )
+                Column {
+                    Text(
+                        text = if (completedCount > 0) "$completedCount Payment(s) Completed!" 
+                               else "$pendingCount Payment(s) Processing",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = if (completedCount > 0) Color(0xFF166534) else Color(0xFFB45309)
+                    )
+                    Text(
+                        "Tap to view details",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+            }
+            Icon(
+                Icons.Rounded.KeyboardArrowRight,
+                contentDescription = "View",
+                tint = Color(0xFF64748B)
+            )
+        }
+    }
+}
+
+@Composable
+fun PendingTransactionsDialog(
+    transactions: List<PendingTransaction>,
+    onDismiss: () -> Unit,
+    onResend: (PendingTransaction) -> Unit,
+    onRemove: (PendingTransaction) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("📋", fontSize = 24.sp)
+                Text(
+                    "Pending Transactions",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (transactions.isEmpty()) {
+                    Text(
+                        "No pending transactions",
+                        color = Color(0xFF64748B),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    transactions.forEach { tx ->
+                        PendingTransactionItem(
+                            transaction = tx,
+                            onResend = { onResend(tx) },
+                            onRemove = { onRemove(tx) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+            ) {
+                Text("Close")
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+fun PendingTransactionItem(
+    transaction: PendingTransaction,
+    onResend: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val elapsed = (System.currentTimeMillis() - transaction.startTime) / 1000
+    val statusColor = when (transaction.status) {
+        PendingStatus.COMPLETED -> Color(0xFF10B981)
+        PendingStatus.CANCELLED, PendingStatus.FAILED, PendingStatus.TIMEOUT -> Color(0xFFEF4444)
+        else -> Color(0xFFF59E0B)
+    }
+    val statusText = when (transaction.status) {
+        PendingStatus.WAITING_FOR_PIN -> "⏳ Waiting for PIN"
+        PendingStatus.PROCESSING -> "🔄 Processing..."
+        PendingStatus.COMPLETED -> "✅ Completed"
+        PendingStatus.CANCELLED -> "❌ Cancelled"
+        PendingStatus.FAILED -> "❌ Failed"
+        PendingStatus.TIMEOUT -> "⏱️ Timed Out"
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "📱 ${transaction.phoneNumber}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        "KES ${String.format("%,.0f", transaction.amount)} • ${transaction.pumpName}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+                Text(
+                    "${elapsed}s ago",
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8)
+                )
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    statusText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = statusColor
+                )
+                
+                if (transaction.status == PendingStatus.COMPLETED) {
+                    Text(
+                        "🧾 ${transaction.receiptNumber ?: ""}",
+                        fontSize = 11.sp,
+                        color = Color(0xFF10B981),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (transaction.status == PendingStatus.CANCELLED || 
+                        transaction.status == PendingStatus.TIMEOUT) {
+                        Button(
+                            onClick = onResend,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("🔄 Resend", fontSize = 11.sp)
+                        }
+                    }
+                    
+                    if (transaction.status != PendingStatus.WAITING_FOR_PIN && 
+                        transaction.status != PendingStatus.PROCESSING) {
+                        IconButton(
+                            onClick = onRemove,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Remove",
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
