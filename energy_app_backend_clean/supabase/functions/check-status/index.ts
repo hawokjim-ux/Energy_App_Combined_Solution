@@ -61,19 +61,19 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        ResultCode: resultCode,
-        ResultDesc: resultDesc,
-        CheckoutRequestID: transaction.checkout_request_id,
-        Amount: transaction.amount,
-        MpesaReceiptNumber: transaction.mpesa_receipt,
+        resultCode: resultCode,
+        resultDesc: resultDesc,
+        checkoutRequestID: transaction.checkout_request_id,
+        amount: transaction.amount,
+        mpesaReceiptNumber: transaction.mpesa_receipt,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        message: (error as Error).message 
+      JSON.stringify({
+        success: false,
+        message: (error as Error).message
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );

@@ -1,5 +1,5 @@
 // Supabase Edge Function: M-Pesa STK Push
-// Deploy to: supabase/functions/stkpush/index.ts
+// Deploy with: supabase functions deploy stkpush
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -14,6 +14,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  const startTime = Date.now();
 
   try {
     // Get M-Pesa credentials from environment
@@ -30,7 +32,22 @@ serve(async (req) => {
       : "https://sandbox.safaricom.co.ke";
 
     // Get request body
-    const { amount, phone, account, description, user_id, pump_id, shift_id, fuel_type, quantity } = await req.json();
+    const {
+      amount,
+      phone,
+      account,
+      description,
+      user_id,
+      attendant_id,
+      pump_id,
+      pump_shift_id,
+      shift_id,
+      station_id,
+      fuel_type_id,
+      liters_sold,
+      price_per_liter,
+      fcm_token
+    } = await req.json();
 
     // Validate inputs
     if (!amount || !phone) {
@@ -42,6 +59,8 @@ serve(async (req) => {
     if (!formattedPhone.match(/^2547\d{8}$/)) {
       throw new Error("Invalid phone number. Use format: 07XXXXXXXX or 2547XXXXXXXX");
     }
+
+    console.log(`⚡ [EDGE] STK Push - Phone: ${formattedPhone}, Amount: ${amount}`);
 
     // Step 1: Get M-Pesa access token
     const credentials = btoa(`${consumerKey}:${consumerSecret}`);
@@ -59,19 +78,22 @@ serve(async (req) => {
     const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
     const password = btoa(`${shortcode}${passkey}${timestamp}`);
 
-    // Step 3: Send STK Push
+    // Get Till Number (for Buy Goods) - defaults to shortcode if not set
+    const tillNumber = Deno.env.get("MPESA_TILL_NUMBER") || shortcode;
+
+    // Step 3: Send STK Push (Buy Goods / Till)
     const stkPushData = {
       BusinessShortCode: shortcode,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: "CustomerPayBillOnline",
+      TransactionType: "CustomerBuyGoodsOnline",  // For Till numbers
       Amount: Math.floor(amount),
       PartyA: formattedPhone,
-      PartyB: shortcode,
+      PartyB: tillNumber,  // Till number for Buy Goods
       PhoneNumber: formattedPhone,
       CallBackURL: callbackUrl,
       AccountReference: account || "EnergyApp",
-      TransactionDesc: description || "Payment",
+      TransactionDesc: description || "Fuel Payment",
     };
 
     const stkResponse = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
@@ -94,26 +116,34 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Step 5: Create sale record
+    // Generate sale ID number in RCP-XXXXX format
+    const saleIdNo = `RCP-${String(Date.now()).slice(-5)}`;
+
+    // Step 5: Create sale record (matching your schema)
     const { data: sale, error: saleError } = await supabase
       .from("sales")
       .insert({
-        pump_id,
-        user_id,
-        shift_id,
-        fuel_type,
-        quantity,
+        sale_id_no: saleIdNo,
+        pump_shift_id: pump_shift_id || 1,
+        pump_id: pump_id || 1,
+        attendant_id: attendant_id || user_id,
         amount,
+        total_amount: amount,
+        customer_mobile_no: formattedPhone,
+        transaction_status: "PENDING",
+        checkout_request_id: stkResult.CheckoutRequestID,
+        station_id: station_id || 1,
+        fuel_type_id,
+        liters_sold: liters_sold || 0,
+        price_per_liter: price_per_liter || 0,
         payment_method: "mpesa",
-        payment_status: "pending",
-        customer_phone: formattedPhone,
       })
       .select()
       .single();
 
     if (saleError) {
       console.error("Sale creation error:", saleError);
-      throw new Error(`Failed to create sale: ${saleError.message}`);
+      // Continue anyway - transaction record is more important
     }
 
     // Step 6: Create M-Pesa transaction record
@@ -124,24 +154,28 @@ serve(async (req) => {
         merchant_request_id: stkResult.MerchantRequestID,
         phone: formattedPhone,
         amount,
-        account_ref: sale.id,
-        user_id,
+        account_ref: sale?.sale_id || saleIdNo,
+        station_id: station_id || 1,
         status: "pending",
+        fcm_token: fcm_token,
       });
 
     if (mpesaError) {
       console.error("M-Pesa transaction creation error:", mpesaError);
-      throw new Error(`Failed to create transaction: ${mpesaError.message}`);
     }
+
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ [EDGE] STK Push successful in ${processingTime}ms`);
 
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        message: "STK Push sent successfully",
-        sale_id: sale.id,
+        message: "STK Push sent! Check your phone.",
+        sale_id: sale?.sale_id,
         checkout_request_id: stkResult.CheckoutRequestID,
         merchant_request_id: stkResult.MerchantRequestID,
+        processing_time_ms: processingTime,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -149,11 +183,14 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("STK Push error:", error);
+    const processingTime = Date.now() - startTime;
+    console.error(`❌ [EDGE] STK Push error after ${processingTime}ms:`, error);
+
     return new Response(
       JSON.stringify({
         success: false,
         message: (error as Error).message || "An error occurred",
+        processing_time_ms: processingTime,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

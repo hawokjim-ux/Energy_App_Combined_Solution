@@ -184,19 +184,22 @@ if (($stkResponse['ResponseCode'] ?? '1') == '0') {
             $saleRow = $insertSale->fetch(PDO::FETCH_ASSOC);
             $saleId = $saleRow['sale_id'] ?? null;
             
-            // Also insert into mpesa_transactions for tracking
+            // Also insert into mpesa_transactions for tracking - NOW WITH STATION_ID!
+            logMessage("📊 Inserting into mpesa_transactions: checkout=$checkoutRequestID, station_id=$stationId");
             $insertTrans = $conn->prepare("
-                INSERT INTO mpesa_transactions (checkout_request_id, merchant_request_id, phone_number, amount, status)
-                VALUES (:checkout, :merchant, :phone, :amount, 'PENDING')
+                INSERT INTO mpesa_transactions (checkout_request_id, merchant_request_id, phone, amount, status, station_id, account_ref)
+                VALUES (:checkout, :merchant, :phone, :amount, 'pending', :station_id, :account_ref)
             ");
             $insertTrans->execute([
                 ':checkout' => $checkoutRequestID,
                 ':merchant' => $merchantRequestID,
                 ':phone' => $phone,
-                ':amount' => $amount
+                ':amount' => $amount,
+                ':station_id' => $stationId,
+                ':account_ref' => $accountRef
             ]);
             
-            logMessage("DB saved - SaleID: $saleId, SaleIdNo: $saleIdNo");
+            logMessage("✅ mpesa_transactions saved - SaleID: $saleId, SaleIdNo: $saleIdNo, StationID: $stationId");
             
         } catch (Exception $e) {
             logMessage("DB Error: " . $e->getMessage());

@@ -98,6 +98,9 @@ class SalesViewModel @Inject constructor(
     
     // Track realtime subscription job for cleanup
     private var realtimeJob: Job? = null
+    
+    // Track payment start time for performance measurement
+    private var paymentStartTime: Long = 0L
 
     init {
         loadData()
@@ -442,6 +445,9 @@ class SalesViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isProcessing = true)
+            
+            // Start tracking payment time
+            paymentStartTime = System.currentTimeMillis()
 
             try {
                 val shiftId = pump.currentShiftId ?: 0
@@ -581,9 +587,10 @@ class SalesViewModel @Inject constructor(
                                 }
 
                                 val amount = _uiState.value.amount.toDoubleOrNull() ?: 0.0
+                                val elapsedSeconds = (System.currentTimeMillis() - paymentStartTime) / 1000.0
                                 _uiState.value = _uiState.value.copy(
                                     isProcessing = false,
-                                    successMessage = "✅ M-Pesa Payment Successful!\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L\nReceipt: ${statusResult.mpesaReceiptNumber}",
+                                    successMessage = "✅ M-Pesa Payment Successful!\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L\nReceipt: ${statusResult.mpesaReceiptNumber}\n⚡ Completed in ${String.format("%.1f", elapsedSeconds)} seconds",
                                     mpesaReceipt = statusResult.mpesaReceiptNumber,
                                     error = null,
                                     salesCount = _uiState.value.salesCount + 1
