@@ -7,9 +7,12 @@ import com.energyapp.data.remote.SupabaseApiService
 import com.energyapp.data.remote.MpesaBackendService
 import com.energyapp.data.remote.MpesaWebhookSupabaseService
 import com.energyapp.data.remote.MpesaStkRequest
+import com.energyapp.data.remote.SupabaseRealtimeService
+import com.energyapp.data.remote.TransactionStatusEvent
 import com.energyapp.data.remote.models.FuelTypeResponse
 import com.energyapp.util.MpesaConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,7 +85,8 @@ data class SalesUiState(
 class SalesViewModel @Inject constructor(
     private val supabaseApiService: SupabaseApiService,
     private val mpesaBackendService: MpesaBackendService,
-    private val mpesaWebhookSupabaseService: MpesaWebhookSupabaseService
+    private val mpesaWebhookSupabaseService: MpesaWebhookSupabaseService,
+    private val supabaseRealtimeService: SupabaseRealtimeService
 ) : ViewModel() {
 
     private val TAG = "SalesViewModel"
@@ -91,6 +95,9 @@ class SalesViewModel @Inject constructor(
     val uiState: StateFlow<SalesUiState> = _uiState.asStateFlow()
 
     private var userId: Int = 0
+    
+    // Track realtime subscription job for cleanup
+    private var realtimeJob: Job? = null
 
     init {
         loadData()
@@ -490,8 +497,8 @@ class SalesViewModel @Inject constructor(
                     error = null
                 )
 
-                // Start faster polling (3 seconds instead of 5)
-                pollTransactionStatus(checkoutRequestID, saleId)
+                // ⚡ REALTIME: Subscribe to instant updates instead of polling!
+                subscribeToRealtimeUpdates(checkoutRequestID, saleId)
 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Payment initiation error: ${e.message}")
@@ -530,112 +537,221 @@ class SalesViewModel @Inject constructor(
     }
 
     /**
-     * Poll for transaction status - FASTER polling (3 seconds)
+     * ⚡ REALTIME: Subscribe to instant transaction updates via Supabase Realtime
+     * 
+     * This replaces the old polling method and provides:
+     * - INSTANT payment confirmation (< 1 second)
+     * - Lower battery usage (no repeated API calls)
+     * - Better user experience
      */
-    private fun pollTransactionStatus(checkoutRequestID: String, saleId: String?) {
-        viewModelScope.launch {
-            Log.d(TAG, "🔄 Starting fast status polling for: $checkoutRequestID")
-
-            // Faster polling: 20 attempts × 3 seconds = 1 minute timeout
-            val maxAttempts = 20
+    private fun subscribeToRealtimeUpdates(checkoutRequestID: String, saleId: String?) {
+        Log.d(TAG, "⚡ Starting REALTIME subscription for: $checkoutRequestID")
+        
+        // Cancel any existing subscription
+        realtimeJob?.cancel()
+        
+        // Subscribe to realtime updates
+        realtimeJob = supabaseRealtimeService.subscribeToTransactionStatus(
+            checkoutRequestId = checkoutRequestID,
+            scope = viewModelScope
+        ) { event ->
+            Log.d(TAG, "📥 Realtime event received: $event")
             
-            repeat(maxAttempts) { attempt ->
-                delay(3000) // 3 second intervals (faster!)
-
-                val attemptNum = attempt + 1
-                _uiState.value = _uiState.value.copy(pollingAttempt = attemptNum)
-                Log.d(TAG, "🔍 Polling attempt $attemptNum/$maxAttempts...")
-
-                try {
-                    val statusResult = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
-
-                    Log.d(TAG, "📊 Status: success=${statusResult.success}, resultCode=${statusResult.resultCode}")
-
-                    if (statusResult.success) {
-                        when (statusResult.resultCode) {
-                            null -> {
-                                Log.d(TAG, "⏳ Payment pending (attempt $attemptNum/$maxAttempts)")
-                            }
-
-                            0 -> {
-                                // ✅ SUCCESS
-                                Log.d(TAG, "✅ PAYMENT SUCCESSFUL!")
-                                Log.d(TAG, "💳 Receipt: ${statusResult.mpesaReceiptNumber}")
-
-                                saleId?.toIntOrNull()?.let { id ->
-                                    try {
-                                        supabaseApiService.updateSaleTransactionStatus(
-                                            id, "SUCCESS", statusResult.mpesaReceiptNumber
-                                        )
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
-                                    }
-                                }
-
-                                val amount = _uiState.value.amount.toDoubleOrNull() ?: 0.0
-                                _uiState.value = _uiState.value.copy(
-                                    isProcessing = false,
-                                    successMessage = "✅ M-Pesa Payment Successful!\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L\nReceipt: ${statusResult.mpesaReceiptNumber}",
-                                    mpesaReceipt = statusResult.mpesaReceiptNumber,
-                                    error = null,
-                                    salesCount = _uiState.value.salesCount + 1
+            when (event) {
+                is TransactionStatusEvent.Completed -> {
+                    Log.d(TAG, "✅ INSTANT PAYMENT CONFIRMATION!")
+                    Log.d(TAG, "💳 Receipt: ${event.receiptNumber}")
+                    
+                    // Update sale status in database
+                    saleId?.toIntOrNull()?.let { id ->
+                        viewModelScope.launch {
+                            try {
+                                supabaseApiService.updateSaleTransactionStatus(
+                                    id, "SUCCESS", event.receiptNumber
                                 )
-                                return@launch
-                            }
-
-                            1032 -> {
-                                Log.d(TAG, "❌ Payment cancelled by user")
-                                saleId?.toIntOrNull()?.let { id ->
-                                    try { supabaseApiService.updateSaleTransactionStatus(id, "CANCELLED") } 
-                                    catch (e: Exception) { Log.w(TAG, "⚠️ Sale update failed") }
-                                }
-                                _uiState.value = _uiState.value.copy(
-                                    isProcessing = false,
-                                    error = "Payment was cancelled by user"
-                                )
-                                return@launch
-                            }
-
-                            1 -> {
-                                Log.d(TAG, "❌ Insufficient funds")
-                                _uiState.value = _uiState.value.copy(
-                                    isProcessing = false,
-                                    error = "Insufficient funds in M-Pesa account"
-                                )
-                                return@launch
-                            }
-
-                            1037 -> {
-                                Log.d(TAG, "⏱️ Transaction timeout")
-                                _uiState.value = _uiState.value.copy(
-                                    isProcessing = false,
-                                    error = "Payment request timed out"
-                                )
-                                return@launch
-                            }
-
-                            else -> {
-                                Log.d(TAG, "❌ Payment failed: ${statusResult.resultDesc}")
-                                _uiState.value = _uiState.value.copy(
-                                    isProcessing = false,
-                                    error = "Payment failed: ${statusResult.resultDesc}"
-                                )
-                                return@launch
+                            } catch (e: Exception) {
+                                Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
                             }
                         }
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "❌ Status check error (attempt $attemptNum): ${e.message}")
+                    
+                    val amount = _uiState.value.amount.toDoubleOrNull() ?: event.amount
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        successMessage = "✅ M-Pesa Payment Successful!\n" +
+                            "Amount: KES ${String.format("%,.2f", amount)}\n" +
+                            "Liters: ${String.format("%.2f", _uiState.value.litersSold)} L\n" +
+                            "Receipt: ${event.receiptNumber}",
+                        mpesaReceipt = event.receiptNumber,
+                        error = null,
+                        salesCount = _uiState.value.salesCount + 1
+                    )
+                }
+                
+                is TransactionStatusEvent.Cancelled -> {
+                    Log.d(TAG, "❌ Payment cancelled")
+                    saleId?.toIntOrNull()?.let { id ->
+                        viewModelScope.launch {
+                            try { 
+                                supabaseApiService.updateSaleTransactionStatus(id, "CANCELLED") 
+                            } catch (e: Exception) { 
+                                Log.w(TAG, "⚠️ Sale update failed") 
+                            }
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        error = "Payment was cancelled by user"
+                    )
+                }
+                
+                is TransactionStatusEvent.Failed -> {
+                    Log.d(TAG, "❌ Payment failed: ${event.reason}")
+                    
+                    val errorMessage = when (event.resultCode) {
+                        1 -> "Insufficient funds in M-Pesa account"
+                        1037 -> "Payment request timed out"
+                        else -> "Payment failed: ${event.reason}"
+                    }
+                    
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        error = errorMessage
+                    )
+                }
+                
+                is TransactionStatusEvent.Timeout -> {
+                    Log.d(TAG, "⏰ Realtime timeout - falling back to final check")
+                    // Do one final status check
+                    viewModelScope.launch {
+                        performFinalStatusCheck(checkoutRequestID, saleId)
+                    }
+                }
+                
+                is TransactionStatusEvent.Error -> {
+                    Log.e(TAG, "❌ Realtime error: ${event.message}")
+                    // Fall back to polling on realtime error
+                    fallbackToPollling(checkoutRequestID, saleId)
+                }
+                
+                is TransactionStatusEvent.Pending -> {
+                    // Still waiting, update UI
+                    val currentAttempt = _uiState.value.pollingAttempt + 1
+                    _uiState.value = _uiState.value.copy(pollingAttempt = currentAttempt)
+                    Log.d(TAG, "⏳ Payment still pending...")
                 }
             }
-
-            // Polling timeout
-            Log.d(TAG, "⏰ Polling timeout after $maxAttempts attempts")
+        }
+    }
+    
+    /**
+     * Perform a final status check when realtime times out
+     */
+    private suspend fun performFinalStatusCheck(checkoutRequestID: String, saleId: String?) {
+        try {
+            val statusResult = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
+            
+            when (statusResult.resultCode) {
+                0 -> {
+                    Log.d(TAG, "✅ Final check: Payment successful!")
+                    saleId?.toIntOrNull()?.let { id ->
+                        try {
+                            supabaseApiService.updateSaleTransactionStatus(
+                                id, "SUCCESS", statusResult.mpesaReceiptNumber
+                            )
+                        } catch (e: Exception) { }
+                    }
+                    val amount = _uiState.value.amount.toDoubleOrNull() ?: 0.0
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        successMessage = "✅ M-Pesa Payment Successful!\nReceipt: ${statusResult.mpesaReceiptNumber}",
+                        mpesaReceipt = statusResult.mpesaReceiptNumber,
+                        salesCount = _uiState.value.salesCount + 1
+                    )
+                }
+                1032 -> {
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        error = "Payment was cancelled by user"
+                    )
+                }
+                else -> {
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        error = "Payment confirmation timeout. Please check M-Pesa messages."
+                    )
+                }
+            }
+        } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isProcessing = false,
                 error = "Payment confirmation timeout. Please check M-Pesa messages."
             )
         }
+    }
+    
+    /**
+     * Fallback to polling if realtime connection fails
+     */
+    private fun fallbackToPollling(checkoutRequestID: String, saleId: String?) {
+        Log.d(TAG, "🔄 Falling back to polling...")
+        
+        viewModelScope.launch {
+            // Simpler polling with fewer attempts since realtime failed
+            repeat(10) { attempt ->
+                delay(3000)
+                
+                try {
+                    val statusResult = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
+                    
+                    when (statusResult.resultCode) {
+                        0 -> {
+                            Log.d(TAG, "✅ Polling: Payment successful!")
+                            saleId?.toIntOrNull()?.let { id ->
+                                try {
+                                    supabaseApiService.updateSaleTransactionStatus(
+                                        id, "SUCCESS", statusResult.mpesaReceiptNumber
+                                    )
+                                } catch (e: Exception) { }
+                            }
+                            val amount = _uiState.value.amount.toDoubleOrNull() ?: 0.0
+                            _uiState.value = _uiState.value.copy(
+                                isProcessing = false,
+                                successMessage = "✅ M-Pesa Payment Successful!\nReceipt: ${statusResult.mpesaReceiptNumber}",
+                                mpesaReceipt = statusResult.mpesaReceiptNumber,
+                                salesCount = _uiState.value.salesCount + 1
+                            )
+                            return@launch
+                        }
+                        1032, 1, 1037 -> {
+                            _uiState.value = _uiState.value.copy(
+                                isProcessing = false,
+                                error = statusResult.resultDesc ?: "Payment failed"
+                            )
+                            return@launch
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Polling error: ${e.message}")
+                }
+            }
+            
+            // Timeout
+            _uiState.value = _uiState.value.copy(
+                isProcessing = false,
+                error = "Payment confirmation timeout. Please check M-Pesa messages."
+            )
+        }
+    }
+    
+    /**
+     * Cleanup when ViewModel is destroyed
+     */
+    override fun onCleared() {
+        super.onCleared()
+        realtimeJob?.cancel()
+        supabaseRealtimeService.disconnect()
+        Log.d(TAG, "🧹 ViewModel cleared, realtime disconnected")
     }
 
     fun clearMessages() {

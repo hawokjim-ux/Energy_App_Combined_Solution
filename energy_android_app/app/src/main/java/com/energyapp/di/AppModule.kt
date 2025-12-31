@@ -3,6 +3,7 @@ package com.energyapp.di
 import android.content.Context
 import com.energyapp.data.remote.MpesaBackendService
 import com.energyapp.data.remote.SupabaseApiService
+import com.energyapp.data.remote.SupabaseRealtimeService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +41,16 @@ object AppModule {
         mpesaBackendService: MpesaBackendService
     ): SupabaseApiService {
         return SupabaseApiService(mpesaBackendService)
+    }
+
+    /**
+     * Provides Supabase Realtime Service for instant M-Pesa transaction updates
+     * Handles: WebSocket connections, real-time database change notifications
+     */
+    @Singleton
+    @Provides
+    fun provideSupabaseRealtimeService(): SupabaseRealtimeService {
+        return SupabaseRealtimeService()
     }
 
     // ==================== CONTEXT ====================
