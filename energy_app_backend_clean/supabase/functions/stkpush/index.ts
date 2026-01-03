@@ -55,9 +55,10 @@ serve(async (req) => {
     }
 
     // Format phone number
+    // Supports: 07xx, 0110-0115, 0100-0109, 254xxxxxxxxx
     const formattedPhone = formatPhoneNumber(phone);
-    if (!formattedPhone.match(/^2547\d{8}$/)) {
-      throw new Error("Invalid phone number. Use format: 07XXXXXXXX or 2547XXXXXXXX");
+    if (!formattedPhone.match(/^254(7\d{8}|1[01]\d{7})$/)) {
+      throw new Error("Invalid phone number. Supported formats: 07XXXXXXXX, 0110XXXXXX, 0100XXXXXX, or 254XXXXXXXXX");
     }
 
     console.log(`⚡ [EDGE] STK Push - Phone: ${formattedPhone}, Amount: ${amount}`);
@@ -200,15 +201,25 @@ serve(async (req) => {
   }
 });
 
-// Helper function to format phone number
+/**
+ * Format phone number to M-Pesa format (254XXXXXXXXX)
+ * Supports all Kenyan formats:
+ * - 07XX XXX XXX (original Safaricom, Airtel, Telkom)
+ * - 011X XXX XXX (new Safaricom: 0110-0115)
+ * - 010X XXX XXX (new Airtel: 0100-0109)
+ * - 254XXXXXXXXX (international format)
+ */
 function formatPhoneNumber(phone: string): string {
   const cleaned = phone.replace(/[^0-9]/g, "");
 
   if (cleaned.startsWith("254")) {
+    // Already in international format
     return cleaned;
   } else if (cleaned.startsWith("0")) {
+    // Local format: 07x, 010x, 011x -> 2547x, 25410x, 25411x
     return "254" + cleaned.slice(1);
-  } else if (cleaned.startsWith("7")) {
+  } else if (cleaned.startsWith("7") || cleaned.startsWith("1")) {
+    // Without leading 0: 7x, 10x, 11x
     return "254" + cleaned;
   }
 

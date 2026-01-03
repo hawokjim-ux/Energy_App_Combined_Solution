@@ -31,14 +31,21 @@ class MpesaApiService {
 
     /**
      * Validate Kenyan phone number
+     * Supports all formats:
+     * - 07XX XXX XXX (original Safaricom, Airtel, Telkom)
+     * - 011X XXX XXX (new Safaricom: 0110-0115)
+     * - 010X XXX XXX (new Airtel: 0100-0109)
+     * - 254XXXXXXXXX (international format)
      */
     fun isValidKenyanPhone(phone: String): Boolean {
         val formatted = formatPhoneNumber(phone)
-        return formatted.matches(Regex("^2547\\d{8}$"))
+        // Matches: 2547xxxxxxxx, 25410xxxxxxx, 25411xxxxxxx
+        return formatted.matches(Regex("^254(7\\d{8}|1[01]\\d{7})$"))
     }
 
     /**
-     * Format phone number to M-Pesa format (2547XXXXXXXX)
+     * Format phone number to M-Pesa format (254XXXXXXXXX)
+     * Handles all Kenyan phone number formats
      */
     private fun formatPhoneNumber(phone: String): String {
         var cleaned = phone.replace("+", "")
@@ -49,7 +56,7 @@ class MpesaApiService {
         return when {
             cleaned.startsWith("254") -> cleaned
             cleaned.startsWith("0") -> "254${cleaned.substring(1)}"
-            cleaned.startsWith("7") -> "254$cleaned"
+            cleaned.startsWith("7") || cleaned.startsWith("1") -> "254$cleaned"
             else -> cleaned
         }
     }

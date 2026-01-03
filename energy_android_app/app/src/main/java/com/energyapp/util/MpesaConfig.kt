@@ -24,21 +24,44 @@ object MpesaConfig {
     const val POLLING_INTERVAL = 3000  // Faster polling (3 seconds)
     const val MAX_POLLING_ATTEMPTS = 20
 
+    /**
+     * Validate Kenyan phone number
+     * Supports all formats:
+     * - 07XX XXX XXX (original Safaricom, Airtel, Telkom)
+     * - 011X XXX XXX (new Safaricom: 0110-0115)
+     * - 010X XXX XXX (new Airtel: 0100-0109)
+     * - 254XXXXXXXXX (international format)
+     */
     fun isValidKenyanPhone(phone: String): Boolean {
         val cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").trim()
         return when {
+            // Traditional 07xx format (Safaricom, Airtel, Telkom)
             cleaned.matches(Regex("^07\\d{8}$")) -> true
-            cleaned.matches(Regex("^254\\d{9}$")) -> true
+            // New Safaricom 011x format (0110-0115)
+            cleaned.matches(Regex("^011[0-5]\\d{6}$")) -> true
+            // New Airtel 010x format (0100-0109)
+            cleaned.matches(Regex("^010[0-9]\\d{6}$")) -> true
+            // International format with 2547x
+            cleaned.matches(Regex("^2547\\d{8}$")) -> true
+            // International format with 25410x or 25411x
+            cleaned.matches(Regex("^2541[01]\\d{7}$")) -> true
             else -> false
         }
     }
 
+    /**
+     * Format phone number to M-Pesa format (254XXXXXXXXX)
+     * Handles all Kenyan phone number formats
+     */
     fun formatPhoneNumber(phone: String): String {
         val cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").trim()
         return when {
+            // Already in international format
             cleaned.startsWith("254") -> cleaned
+            // Local format starting with 0 (07x, 010x, 011x)
             cleaned.startsWith("0") -> "254${cleaned.substring(1)}"
-            cleaned.startsWith("7") -> "254$cleaned"
+            // Without leading 0 (7x, 10x, 11x)
+            cleaned.startsWith("7") || cleaned.startsWith("1") -> "254$cleaned"
             else -> cleaned
         }
     }
