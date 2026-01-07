@@ -153,7 +153,10 @@ serve(async (req) => {
         status = "failed";
       }
 
-      if (status !== "pending" && transaction) {
+
+      // Only update database if we have the receipt number
+      // If STK Query returns success but no receipt, let the callback handle the DB update
+      if (status !== "pending" && transaction && mpesaReceiptNumber) {
         // Update transaction in database
         await supabase
           .from("mpesa_transactions")
@@ -177,6 +180,10 @@ serve(async (req) => {
           .eq("checkout_request_id", checkoutRequestId);
 
         console.log(`✅ Updated database: status=${status}, receipt=${mpesaReceiptNumber}`);
+      } else if (resultCode === 0 && !mpesaReceiptNumber) {
+        // Success but no receipt - wait for callback to update the DB
+        // Just tell the app it's successful, callback will save the receipt
+        console.log(`⚡ Success detected but waiting for callback to provide receipt`);
       }
     }
 

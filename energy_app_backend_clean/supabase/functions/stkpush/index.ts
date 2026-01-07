@@ -24,7 +24,7 @@ serve(async (req) => {
     const shortcode = Deno.env.get("MPESA_SHORTCODE")!;
     const passkey = Deno.env.get("MPESA_PASSKEY")!;
     const callbackUrl = Deno.env.get("MPESA_CALLBACK_URL")!;
-    const environment = Deno.env.get("MPESA_ENVIRONMENT") || "sandbox";
+    const environment = Deno.env.get("MPESA_ENVIRONMENT") || "production";
 
     // M-Pesa API URLs
     const baseUrl = environment === "production"
