@@ -159,8 +159,10 @@ function getCachedAccessToken($conn, $stationId, $consumerKey, $consumerSecret) 
         CURLOPT_HTTPHEADER => ["Authorization: Basic $credentials"],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 8,            // Reduced from 15s for faster response
+        CURLOPT_CONNECTTIMEOUT => 3,      // Fast connection timeout
+        CURLOPT_TCP_FASTOPEN => true,     // Enable TCP Fast Open
+        CURLOPT_TCP_NODELAY => true,      // Lower latency
     ]);
     
     $result = curl_exec($ch);
@@ -200,7 +202,7 @@ function getCachedAccessToken($conn, $stationId, $consumerKey, $consumerSecret) 
 }
 
 // =====================================================
-// OPTIMIZED STK PUSH REQUEST
+// OPTIMIZED STK PUSH REQUEST - ULTRA FAST VERSION
 // =====================================================
 function makeOptimizedStkRequest($token, $data) {
     $url = 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
@@ -216,8 +218,12 @@ function makeOptimizedStkRequest($token, $data) {
         CURLOPT_POSTFIELDS => json_encode($data),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 15,           // Reduced from 30s for faster response
+        CURLOPT_CONNECTTIMEOUT => 5,      // Fast connection timeout
+        CURLOPT_TCP_FASTOPEN => true,     // Enable TCP Fast Open for faster connections
+        CURLOPT_TCP_NODELAY => true,      // Disable Nagle's algorithm for lower latency
+        CURLOPT_FRESH_CONNECT => false,   // Reuse existing connections
+        CURLOPT_FORBID_REUSE => false,    // Allow connection reuse
     ]);
     
     $result = curl_exec($ch);
@@ -225,7 +231,7 @@ function makeOptimizedStkRequest($token, $data) {
     curl_close($ch);
     
     $stkTime = round((microtime(true) - $stkStart) * 1000, 2);
-    logMessage("STK API call took: {$stkTime}ms");
+    logMessage("⚡ STK API call took: {$stkTime}ms (ULTRA FAST)");
     
     if ($curlError) {
         logMessage("cURL error: $curlError");
@@ -266,14 +272,32 @@ if (empty($phone)) {
     respond(false, "Phone number is required");
 }
 
-// Sanitize phone
-$phone = preg_replace('/\s+/', '', $phone);
-$phone = preg_replace('/^0/', '254', $phone);
-$phone = preg_replace('/^\+/', '', $phone);
-$phone = preg_replace('/[^0-9]/', '', $phone);
+// Sanitize and format phone number
+// Supports all Kenyan formats:
+// - 07XX XXX XXX (original Safaricom, Airtel, Telkom)
+// - 011X XXX XXX (new Safaricom: 0110-0115)
+// - 010X XXX XXX (new Airtel: 0100-0109)
+// - 254XXXXXXXXX (international format)
+$phone = preg_replace('/\s+/', '', $phone);  // Remove spaces
+$phone = preg_replace('/^\+/', '', $phone);  // Remove leading +
+$phone = preg_replace('/[^0-9]/', '', $phone);  // Keep only digits
 
-if (!preg_match('/^254\d{9}$/', $phone)) {
-    respond(false, "Invalid phone number format. Use 0712345678 or 254712345678");
+// Convert local formats to international (254)
+if (preg_match('/^0(7\d{8}|1[01]\d{7})$/', $phone)) {
+    // Matches: 07xxxxxxxx, 010xxxxxxx, 011xxxxxxx
+    $phone = '254' . substr($phone, 1);
+} elseif (preg_match('/^(7\d{8}|1[01]\d{7})$/', $phone)) {
+    // Without leading 0: 7xxxxxxxx, 10xxxxxxx, 11xxxxxxx
+    $phone = '254' . $phone;
+}
+
+// Validate final format: 254 + 9 digits
+// Valid patterns: 
+// - 2547xxxxxxxx (traditional 07xx format)
+// - 25410xxxxxxx (new Airtel 010x format)
+// - 25411xxxxxxx (new Safaricom 011x format: 0110-0119)
+if (!preg_match('/^254(7\d{8}|1[01]\d{7})$/', $phone)) {
+    respond(false, "Invalid phone number format. Supported: 07XXXXXXXX, 0110XXXXXX, 0119XXXXXX, 0100XXXXXX, or 254XXXXXXXXX");
 }
 
 if ($amount < 1) {

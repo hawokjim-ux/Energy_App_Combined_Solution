@@ -21,29 +21,29 @@ object MpesaConfig {
 
     const val STK_PUSH_TIMEOUT = 30
     const val POLLING_TIMEOUT = 120
-    const val POLLING_INTERVAL = 3000  // Faster polling (3 seconds)
-    const val MAX_POLLING_ATTEMPTS = 20
+    const val POLLING_INTERVAL = 2000  // ULTRA FAST polling (2 seconds instead of 3)
+    const val MAX_POLLING_ATTEMPTS = 30  // Increased to handle 60 seconds
 
     /**
      * Validate Kenyan phone number
-     * Supports all formats:
-     * - 07XX XXX XXX (original Safaricom, Airtel, Telkom)
-     * - 011X XXX XXX (new Safaricom: 0110-0115)
-     * - 010X XXX XXX (new Airtel: 0100-0109)
-     * - 254XXXXXXXXX (international format)
+     * Supports ALL formats:
+     * - 07XX XXX XXX (original Safaricom, Airtel, Telkom) - 10 digits
+     * - 011X XXX XXX (new Safaricom: 0110-0119) - 10 digits
+     * - 010X XXX XXX (new Airtel: 0100-0109) - 10 digits
+     * - 254XXXXXXXXX (international format) - 12 digits
      */
     fun isValidKenyanPhone(phone: String): Boolean {
         val cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").trim()
         return when {
-            // Traditional 07xx format (Safaricom, Airtel, Telkom)
+            // Traditional 07xx format (Safaricom, Airtel, Telkom) - 10 digits total
             cleaned.matches(Regex("^07\\d{8}$")) -> true
-            // New Safaricom 011x format (0110-0115)
-            cleaned.matches(Regex("^011[0-5]\\d{6}$")) -> true
-            // New Airtel 010x format (0100-0109)
+            // New Safaricom 011x format (0110-0119) - 10 digits total
+            cleaned.matches(Regex("^011[0-9]\\d{6}$")) -> true
+            // New Airtel 010x format (0100-0109) - 10 digits total
             cleaned.matches(Regex("^010[0-9]\\d{6}$")) -> true
-            // International format with 2547x
+            // International format with 2547x - 12 digits total
             cleaned.matches(Regex("^2547\\d{8}$")) -> true
-            // International format with 25410x or 25411x
+            // International format with 25410x or 25411x - 12 digits total
             cleaned.matches(Regex("^2541[01]\\d{7}$")) -> true
             else -> false
         }

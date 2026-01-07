@@ -358,7 +358,7 @@ class SalesViewModel @Inject constructor(
             amountStr.toDouble() > 150000 -> "Amount cannot exceed KES 150,000"
             paymentMethod == PaymentMethod.MPESA && mobile.isEmpty() -> "Please enter customer mobile number for M-Pesa"
             paymentMethod == PaymentMethod.MPESA && !MpesaConfig.isValidKenyanPhone(mobile) -> {
-                "Invalid mobile format. Use 07XXXXXXXX or 254XXXXXXXXX"
+                "Invalid mobile format. Use 07XXXXXXXX, 0110XXXXXX, 0119XXXXXX, or 254XXXXXXXXX"
             }
             else -> null
         }
@@ -577,17 +577,18 @@ class SalesViewModel @Inject constructor(
     }
 
     /**
-     * Poll for transaction status - RELIABLE polling method
+     * Poll for transaction status - ULTRA FAST polling method
      */
     private fun pollTransactionStatus(checkoutRequestID: String, saleId: String?) {
         viewModelScope.launch {
-            Log.d(TAG, "🔄 Starting status polling for: $checkoutRequestID")
+            Log.d(TAG, "🔄 Starting ULTRA FAST status polling for: $checkoutRequestID")
 
-            // Polling: 20 attempts × 3 seconds = 1 minute timeout
-            val maxAttempts = 20
+            // ULTRA FAST Polling: 30 attempts × 2 seconds = 1 minute timeout
+            val maxAttempts = MpesaConfig.MAX_POLLING_ATTEMPTS
+            val pollingInterval = MpesaConfig.POLLING_INTERVAL.toLong()
             
             repeat(maxAttempts) { attempt ->
-                delay(3000) // 3 second intervals
+                delay(pollingInterval) // 2 second intervals (ULTRA FAST)
 
                 val attemptNum = attempt + 1
                 _uiState.value = _uiState.value.copy(pollingAttempt = attemptNum)

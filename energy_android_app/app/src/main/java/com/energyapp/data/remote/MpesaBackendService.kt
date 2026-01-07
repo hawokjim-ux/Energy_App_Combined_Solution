@@ -167,11 +167,13 @@ class MpesaBackendService @Inject constructor() {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
+        // ⚡ ULTRA FAST HTTP CLIENT - Optimized timeouts for speed
         val httpClient = OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)  // Reduced from 30s
+            .readTimeout(15, TimeUnit.SECONDS)     // Reduced from 30s
+            .writeTimeout(10, TimeUnit.SECONDS)    // Reduced from 30s
+            .retryOnConnectionFailure(true)         // Auto-retry on failure
             .build()
 
         val gson = GsonBuilder()
@@ -187,7 +189,7 @@ class MpesaBackendService @Inject constructor() {
 
         api = retrofit.create(IMpesaBackendApi::class.java)
 
-        Log.d(TAG, "✅ MpesaBackendService initialized")
+        Log.d(TAG, "✅ MpesaBackendService initialized - ULTRA FAST MODE")
         Log.d(TAG, "🌐 Supabase Functions URL: ${MpesaConfig.SUPABASE_FUNCTIONS_URL}")
         Log.d(TAG, "⚡ NO COLD STARTS - Edge Functions ready!")
     }

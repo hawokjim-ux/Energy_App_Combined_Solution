@@ -55,10 +55,10 @@ serve(async (req) => {
     }
 
     // Format phone number
-    // Supports: 07xx, 0110-0115, 0100-0109, 254xxxxxxxxx
+    // Supports: 07xx, 0110-0119, 0100-0109, 254xxxxxxxxx
     const formattedPhone = formatPhoneNumber(phone);
     if (!formattedPhone.match(/^254(7\d{8}|1[01]\d{7})$/)) {
-      throw new Error("Invalid phone number. Supported formats: 07XXXXXXXX, 0110XXXXXX, 0100XXXXXX, or 254XXXXXXXXX");
+      throw new Error("Invalid phone number. Supported formats: 07XXXXXXXX, 0110XXXXXX, 0119XXXXXX, 0100XXXXXX, or 254XXXXXXXXX");
     }
 
     console.log(`⚡ [EDGE] STK Push - Phone: ${formattedPhone}, Amount: ${amount}`);
