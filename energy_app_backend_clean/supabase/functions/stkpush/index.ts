@@ -1,4 +1,4 @@
-// Supabase Edge Function: M-Pesa STK Push - ULTRA FAST VERSION
+// Supabase Edge Function: M-Pesa STK Push - FIXED VERSION
 // Deploy with: supabase functions deploy stkpush
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -8,9 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Global token cache (persists during edge function warm instances)
-let cachedToken: { token: string; expires: number } | null = null;
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -28,28 +25,25 @@ serve(async (req) => {
     const passkey = Deno.env.get("MPESA_PASSKEY")!;
     const callbackUrl = Deno.env.get("MPESA_CALLBACK_URL")!;
     const environment = Deno.env.get("MPESA_ENVIRONMENT") || "production";
+    const tillNumber = Deno.env.get("MPESA_TILL_NUMBER") || shortcode;
 
     // M-Pesa API URLs
     const baseUrl = environment === "production"
       ? "https://api.safaricom.co.ke"
       : "https://sandbox.safaricom.co.ke";
 
-    // Get request body
+    // Get request body - accept all fields from Android app
     const {
       amount,
       phone,
       account,
       description,
       user_id,
-      attendant_id,
       pump_id,
-      pump_shift_id,
       shift_id,
       station_id,
-      fuel_type_id,
-      liters_sold,
-      price_per_liter,
-      fcm_token
+      fuel_type,
+      quantity,  // Liters from Android app
     } = await req.json();
 
     // Validate inputs
@@ -60,22 +54,30 @@ serve(async (req) => {
     // Format phone number
     const formattedPhone = formatPhoneNumber(phone);
     if (!formattedPhone.match(/^254(7\d{8}|1[01]\d{7})$/)) {
-      throw new Error("Invalid phone number. Supported formats: 07XXXXXXXX, 0110XXXXXX, 0119XXXXXX, 0100XXXXXX, or 254XXXXXXXXX");
+      throw new Error("Invalid phone number format");
     }
 
-    console.log(`⚡ [ULTRA FAST] STK Push - Phone: ${formattedPhone}, Amount: ${amount}`);
+    console.log(`⚡ STK Push - Phone: ${formattedPhone}, Amount: ${amount}, Liters: ${quantity || 0}`);
 
-    // ⚡ STEP 1: Get cached or new access token
-    const access_token = await getAccessToken(baseUrl, consumerKey, consumerSecret);
+    // Step 1: Get M-Pesa access token
+    const credentials = btoa(`${consumerKey}:${consumerSecret}`);
+    const tokenResponse = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${credentials}` },
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error("Failed to get M-Pesa access token");
+    }
+
+    const { access_token } = await tokenResponse.json();
     const tokenTime = Date.now() - startTime;
     console.log(`🔑 Token obtained in ${tokenTime}ms`);
 
-    // ⚡ STEP 2: Generate timestamp and password
+    // Step 2: Generate timestamp and password
     const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
     const password = btoa(`${shortcode}${passkey}${timestamp}`);
-    const tillNumber = Deno.env.get("MPESA_TILL_NUMBER") || shortcode;
 
-    // ⚡ STEP 3: Send STK Push (the ONLY blocking call)
+    // Step 3: Send STK Push
     const stkPushData = {
       BusinessShortCode: shortcode,
       Password: password,
@@ -107,47 +109,77 @@ serve(async (req) => {
       throw new Error(stkResult.errorMessage || stkResult.ResponseDescription || "STK Push failed");
     }
 
-    // ⚡ RETURN IMMEDIATELY - Don't wait for DB writes!
-    const processingTime = Date.now() - startTime;
-    console.log(`✅ [ULTRA FAST] STK Push response in ${processingTime}ms`);
-
-    // Generate sale ID for response
-    const saleIdNo = `RCP-${String(Date.now()).slice(-5)}`;
-
-    // 🔥 FIRE AND FORGET: Save to database in background (non-blocking)
+    // Step 4: Initialize Supabase and create records
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Use EdgeRuntime.waitUntil to run DB operations after response
-    const dbPromise = saveToDatabase(
-      supabaseUrl,
-      supabaseServiceKey,
-      {
-        saleIdNo,
-        checkoutRequestId: stkResult.CheckoutRequestID,
-        merchantRequestId: stkResult.MerchantRequestID,
-        formattedPhone,
-        amount,
-        pump_shift_id,
-        pump_id,
-        attendant_id: attendant_id || user_id,
-        station_id,
-        fuel_type_id,
-        liters_sold,
-        price_per_liter,
-        fcm_token,
-      }
-    );
+    // Get next receipt number (sequential)
+    const { count } = await supabase
+      .from("sales")
+      .select("*", { count: "exact", head: true });
 
-    // Don't await - let it run in background
-    dbPromise.catch((err) => console.error("Background DB error:", err));
+    const nextNum = (count || 0) + 1;
+    const saleIdNo = `RCP-${String(nextNum).padStart(5, '0')}`;
 
-    // Return success response IMMEDIATELY
+    // Calculate price per liter
+    const liters = quantity || (amount > 0 ? amount / 180.50 : 0);  // Default fuel price
+    const pricePerLiter = liters > 0 ? amount / liters : 180.50;
+
+    // Step 5: Create sale record with CORRECT fields
+    const { data: sale, error: saleError } = await supabase
+      .from("sales")
+      .insert({
+        sale_id_no: saleIdNo,
+        pump_shift_id: parseInt(shift_id) || 1,
+        pump_id: parseInt(pump_id) || 1,
+        attendant_id: user_id,
+        amount: amount,
+        total_amount: amount,
+        customer_mobile_no: formattedPhone,
+        transaction_status: "PENDING",  // Will be updated by callback
+        checkout_request_id: stkResult.CheckoutRequestID,
+        station_id: parseInt(station_id) || 1,
+        fuel_type_id: fuel_type ? parseInt(fuel_type) : null,
+        liters_sold: liters,
+        price_per_liter: pricePerLiter,
+        payment_method: "mpesa",
+      })
+      .select()
+      .single();
+
+    if (saleError) {
+      console.error("Sale creation error:", saleError);
+    } else {
+      console.log(`✅ Sale created: ${saleIdNo}, Liters: ${liters}`);
+    }
+
+    // Step 6: Create M-Pesa transaction record
+    const { error: mpesaError } = await supabase
+      .from("mpesa_transactions")
+      .insert({
+        checkout_request_id: stkResult.CheckoutRequestID,
+        merchant_request_id: stkResult.MerchantRequestID,
+        phone: formattedPhone,
+        amount: amount,
+        account_ref: sale?.sale_id || saleIdNo,
+        station_id: parseInt(station_id) || 1,
+        status: "pending",
+      });
+
+    if (mpesaError) {
+      console.error("M-Pesa transaction creation error:", mpesaError);
+    }
+
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ STK Push complete in ${processingTime}ms`);
+
+    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
         message: "STK Push sent! Check your phone.",
-        sale_id: saleIdNo,
+        sale_id: sale?.sale_id || saleIdNo,
         checkout_request_id: stkResult.CheckoutRequestID,
         merchant_request_id: stkResult.MerchantRequestID,
         processing_time_ms: processingTime,
@@ -159,7 +191,7 @@ serve(async (req) => {
     );
   } catch (error) {
     const processingTime = Date.now() - startTime;
-    console.error(`❌ [EDGE] STK Push error after ${processingTime}ms:`, error);
+    console.error(`❌ STK Push error after ${processingTime}ms:`, error);
 
     return new Response(
       JSON.stringify({
@@ -174,111 +206,6 @@ serve(async (req) => {
     );
   }
 });
-
-/**
- * Get cached access token or fetch new one
- */
-async function getAccessToken(baseUrl: string, consumerKey: string, consumerSecret: string): Promise<string> {
-  const now = Date.now();
-
-  // Check if we have a valid cached token (with 60 second buffer)
-  if (cachedToken && cachedToken.expires > now + 60000) {
-    console.log("🔑 Using cached token");
-    return cachedToken.token;
-  }
-
-  // Fetch new token
-  console.log("🔄 Fetching new access token...");
-  const credentials = btoa(`${consumerKey}:${consumerSecret}`);
-  const tokenResponse = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
-    headers: { Authorization: `Basic ${credentials}` },
-  });
-
-  if (!tokenResponse.ok) {
-    throw new Error("Failed to get M-Pesa access token");
-  }
-
-  const data = await tokenResponse.json();
-
-  // Cache token (M-Pesa tokens expire in 3600 seconds = 1 hour)
-  cachedToken = {
-    token: data.access_token,
-    expires: now + (data.expires_in || 3600) * 1000,
-  };
-
-  return data.access_token;
-}
-
-/**
- * Save transaction to database (runs in background)
- */
-async function saveToDatabase(
-  supabaseUrl: string,
-  supabaseServiceKey: string,
-  data: {
-    saleIdNo: string;
-    checkoutRequestId: string;
-    merchantRequestId: string;
-    formattedPhone: string;
-    amount: number;
-    pump_shift_id?: number;
-    pump_id?: number;
-    attendant_id?: string;
-    station_id?: number;
-    fuel_type_id?: number;
-    liters_sold?: number;
-    price_per_liter?: number;
-    fcm_token?: string;
-  }
-) {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-  // Create sale record
-  const { data: sale, error: saleError } = await supabase
-    .from("sales")
-    .insert({
-      sale_id_no: data.saleIdNo,
-      pump_shift_id: data.pump_shift_id || 1,
-      pump_id: data.pump_id || 1,
-      attendant_id: data.attendant_id,
-      amount: data.amount,
-      total_amount: data.amount,
-      customer_mobile_no: data.formattedPhone,
-      transaction_status: "PENDING",
-      checkout_request_id: data.checkoutRequestId,
-      station_id: data.station_id || 1,
-      fuel_type_id: data.fuel_type_id,
-      liters_sold: data.liters_sold || 0,
-      price_per_liter: data.price_per_liter || 0,
-      payment_method: "mpesa",
-    })
-    .select()
-    .single();
-
-  if (saleError) {
-    console.error("Sale creation error:", saleError);
-  }
-
-  // Create M-Pesa transaction record
-  const { error: mpesaError } = await supabase
-    .from("mpesa_transactions")
-    .insert({
-      checkout_request_id: data.checkoutRequestId,
-      merchant_request_id: data.merchantRequestId,
-      phone: data.formattedPhone,
-      amount: data.amount,
-      account_ref: sale?.sale_id || data.saleIdNo,
-      station_id: data.station_id || 1,
-      status: "pending",
-      fcm_token: data.fcm_token,
-    });
-
-  if (mpesaError) {
-    console.error("M-Pesa transaction creation error:", mpesaError);
-  }
-
-  console.log("✅ Background DB save completed");
-}
 
 /**
  * Format phone number to M-Pesa format (254XXXXXXXXX)

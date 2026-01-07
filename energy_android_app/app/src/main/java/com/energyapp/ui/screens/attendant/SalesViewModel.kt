@@ -504,7 +504,9 @@ class SalesViewModel @Inject constructor(
                             userId = userId.toString(),
                             pumpId = pump.pumpId.toString(),
                             shiftId = shiftId.toString(),
-                            stationId = _uiState.value.assignedStationId.toString()  // Pass assigned station
+                            stationId = _uiState.value.assignedStationId.toString(),
+                            fuelType = pump.fuelTypeId?.toString(),
+                            quantity = _uiState.value.liters  // Send liters to backend
                         )
                     )
                 } catch (e: Exception) {

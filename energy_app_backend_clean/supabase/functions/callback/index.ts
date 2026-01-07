@@ -8,12 +8,12 @@ serve(async (req) => {
   try {
     // Get callback data from Safaricom
     const callbackData = await req.json();
-    
+
     console.log("M-Pesa Callback Received:", JSON.stringify(callbackData));
 
     // Extract callback data
     const stkCallback = callbackData?.Body?.stkCallback;
-    
+
     if (!stkCallback) {
       throw new Error("Invalid callback data");
     }
@@ -35,7 +35,7 @@ serve(async (req) => {
 
     if (resultCode === 0) {
       const items = stkCallback.CallbackMetadata?.Item || [];
-      
+
       for (const item of items) {
         switch (item.Name) {
           case "MpesaReceiptNumber":
@@ -92,18 +92,33 @@ serve(async (req) => {
       throw new Error(`Database update failed: ${updateError.message}`);
     }
 
-    // Update sales table if sale exists
-    if (transaction?.account_ref) {
-      const paymentStatus = resultCode === 0 ? "completed" : "failed";
-
+    // Update sales table - use transaction_status not payment_status
+    // Match by checkout_request_id which is stored in sales table
+    if (resultCode === 0) {
+      // Update sale status to M-PESA (successful) or COMPLETED
       const { error: saleError } = await supabase
         .from("sales")
         .update({
-          payment_status: paymentStatus,
+          transaction_status: "M-PESA",  // Match what web app uses
           mpesa_receipt: mpesaReceipt,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", transaction.account_ref);
+        .eq("checkout_request_id", checkoutRequestID);
+
+      if (saleError) {
+        console.error("Failed to update sale:", saleError);
+      } else {
+        console.log(`✅ Sale updated to M-PESA status for: ${checkoutRequestID}`);
+      }
+    } else {
+      // Update sale status to FAILED
+      const { error: saleError } = await supabase
+        .from("sales")
+        .update({
+          transaction_status: "FAILED",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("checkout_request_id", checkoutRequestID);
 
       if (saleError) {
         console.error("Failed to update sale:", saleError);
@@ -126,7 +141,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("❌ Callback processing error:", error);
-    
+
     return new Response(
       JSON.stringify({
         ResultCode: 1,

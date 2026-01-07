@@ -8,16 +8,13 @@ object MpesaConfig {
     const val SUPABASE_URL = "https://pxcdaivlvltmdifxietb.supabase.co"
     const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2RhaXZsdmx0bWRpZnhpZXRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3NDI3NDIsImV4cCI6MjA4MTMxODc0Mn0.s6nv24s6M83gAcW_nSKCBfcXcqJ_7owwqdObPDT7Ky0"
 
-    // *** SUPABASE EDGE FUNCTIONS (NO COLD STARTS!) ***
+    // *** SUPABASE EDGE FUNCTIONS ***
     const val SUPABASE_FUNCTIONS_URL = "${SUPABASE_URL}/functions/v1/"
     
     // *** EDGE FUNCTION ENDPOINTS ***
     const val STK_PUSH_ENDPOINT = "${SUPABASE_FUNCTIONS_URL}stkpush"
     const val CHECK_STATUS_ENDPOINT = "${SUPABASE_FUNCTIONS_URL}check-status"
     const val CALLBACK_ENDPOINT = "${SUPABASE_FUNCTIONS_URL}callback"
-    
-    // Legacy Render URL (kept for reference, no longer used)
-    const val RENDER_BASE_URL = "https://online-link.onrender.com/"
 
     const val STK_PUSH_TIMEOUT = 30
     const val POLLING_TIMEOUT = 120
