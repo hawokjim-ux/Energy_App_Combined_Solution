@@ -506,7 +506,7 @@ class SalesViewModel @Inject constructor(
                             shiftId = shiftId.toString(),
                             stationId = _uiState.value.assignedStationId.toString(),
                             fuelType = pump.fuelTypeId?.toString(),
-                            quantity = _uiState.value.liters  // Send liters to backend
+                            quantity = _uiState.value.litersSold  // Send liters to backend
                         )
                     )
                 } catch (e: Exception) {
