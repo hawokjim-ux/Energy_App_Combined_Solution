@@ -8,12 +8,12 @@ serve(async (req) => {
   try {
     // Get callback data from Safaricom
     const callbackData = await req.json();
-    
+
     console.log("M-Pesa Callback Received:", JSON.stringify(callbackData));
 
     // Extract callback data
     const stkCallback = callbackData?.Body?.stkCallback;
-    
+
     if (!stkCallback) {
       throw new Error("Invalid callback data");
     }
@@ -35,7 +35,7 @@ serve(async (req) => {
 
     if (resultCode === 0) {
       const items = stkCallback.CallbackMetadata?.Item || [];
-      
+
       for (const item of items) {
         switch (item.Name) {
           case "MpesaReceiptNumber":
@@ -84,30 +84,32 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq("checkout_request_id", checkoutRequestID)
-      .select("account_ref")
+      .select("account_ref, checkout_request_id")
       .single();
 
     if (updateError) {
-      console.error("Failed to update transaction:", updateError);
-      throw new Error(`Database update failed: ${updateError.message}`);
+      console.error("Failed to update mpesa_transactions:", updateError);
+    } else {
+      console.log(`✅ Updated mpesa_transactions: status=${status}`);
     }
 
-    // Update sales table if sale exists
-    if (transaction?.account_ref) {
-      const paymentStatus = resultCode === 0 ? "completed" : "failed";
+    // Update sales table - use correct field names from schema
+    // transaction_status and mpesa_receipt_number, match by checkout_request_id
+    const transactionStatus = resultCode === 0 ? "M-PESA" : (resultCode === 1032 ? "CANCELLED" : "FAILED");
 
-      const { error: saleError } = await supabase
-        .from("sales")
-        .update({
-          payment_status: paymentStatus,
-          mpesa_receipt: mpesaReceipt,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", transaction.account_ref);
+    const { error: saleError } = await supabase
+      .from("sales")
+      .update({
+        transaction_status: transactionStatus,
+        mpesa_receipt_number: mpesaReceipt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("checkout_request_id", checkoutRequestID);
 
-      if (saleError) {
-        console.error("Failed to update sale:", saleError);
-      }
+    if (saleError) {
+      console.error("Failed to update sales:", saleError);
+    } else {
+      console.log(`✅ Updated sales: transaction_status=${transactionStatus}, receipt=${mpesaReceipt}`);
     }
 
     console.log(`✅ Callback processed successfully for: ${checkoutRequestID}`);
@@ -126,7 +128,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("❌ Callback processing error:", error);
-    
+
     return new Response(
       JSON.stringify({
         ResultCode: 1,

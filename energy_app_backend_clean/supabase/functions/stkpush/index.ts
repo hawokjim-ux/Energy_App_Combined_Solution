@@ -117,8 +117,12 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Generate sale ID number in RCP-XXXXX format
-    const saleIdNo = `RCP-${String(Date.now()).slice(-5)}`;
+    // Generate sale ID number in RCP-XXXXX format (SEQUENTIAL)
+    const { count } = await supabase
+      .from("sales")
+      .select("*", { count: "exact", head: true });
+    const nextNum = (count || 0) + 1;
+    const saleIdNo = `RCP-${String(nextNum).padStart(5, '0')}`;
 
     // Step 5: Create sale record (matching your schema)
     const { data: sale, error: saleError } = await supabase
