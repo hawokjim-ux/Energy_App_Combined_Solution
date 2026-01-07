@@ -168,7 +168,19 @@ class MpesaBackendService @Inject constructor() {
         }
 
         // ⚡ ULTRA FAST HTTP CLIENT - Optimized timeouts for speed
+        // *** CRITICAL: Add Supabase auth headers to ALL requests ***
+        val authInterceptor = okhttp3.Interceptor { chain ->
+            val originalRequest = chain.request()
+            val requestWithAuth = originalRequest.newBuilder()
+                .addHeader("apikey", MpesaConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer ${MpesaConfig.SUPABASE_ANON_KEY}")
+                .addHeader("Content-Type", "application/json")
+                .build()
+            chain.proceed(requestWithAuth)
+        }
+        
         val httpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)  // Auth headers FIRST!
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)  // Reduced from 30s
             .readTimeout(15, TimeUnit.SECONDS)     // Reduced from 30s

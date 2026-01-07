@@ -233,7 +233,18 @@ class StationApiService @Inject constructor() {
             level = HttpLoggingInterceptor.Level.BODY
         }
         
+        // Add Supabase auth headers
+        val authInterceptor = okhttp3.Interceptor { chain ->
+            val request = chain.request().newBuilder()
+                .addHeader("apikey", MpesaConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer ${MpesaConfig.SUPABASE_ANON_KEY}")
+                .addHeader("Content-Type", "application/json")
+                .build()
+            chain.proceed(request)
+        }
+        
         val httpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -245,7 +256,7 @@ class StationApiService @Inject constructor() {
             .create()
         
         val retrofit = Retrofit.Builder()
-            .baseUrl(MpesaConfig.RENDER_BASE_URL)
+            .baseUrl(MpesaConfig.SUPABASE_URL + "/rest/v1/")
             .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()

@@ -147,7 +147,19 @@ class OptimizedMpesaService @Inject constructor() {
         }
 
         // OPTIMIZED HTTP Client with aggressive timeouts
+        // *** CRITICAL: Add Supabase auth headers to ALL requests ***
+        val authInterceptor = okhttp3.Interceptor { chain ->
+            val originalRequest = chain.request()
+            val requestWithAuth = originalRequest.newBuilder()
+                .addHeader("apikey", MpesaConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer ${MpesaConfig.SUPABASE_ANON_KEY}")
+                .addHeader("Content-Type", "application/json")
+                .build()
+            chain.proceed(requestWithAuth)
+        }
+        
         val httpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)  // Auth headers FIRST!
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)  // Reduced from 30
             .readTimeout(20, TimeUnit.SECONDS)     // Reduced from 30
@@ -160,7 +172,7 @@ class OptimizedMpesaService @Inject constructor() {
             .create()
 
         val retrofit = Retrofit.Builder()
-            .baseUrl(MpesaConfig.RENDER_BASE_URL)
+            .baseUrl(MpesaConfig.SUPABASE_FUNCTIONS_URL)
             .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
@@ -168,7 +180,7 @@ class OptimizedMpesaService @Inject constructor() {
         api = retrofit.create(IOptimizedMpesaApi::class.java)
 
         Log.d(TAG, "✅ OptimizedMpesaService initialized")
-        Log.d(TAG, "🌐 Base URL: ${MpesaConfig.RENDER_BASE_URL}")
+        Log.d(TAG, "🌐 Base URL: ${MpesaConfig.SUPABASE_FUNCTIONS_URL}")
     }
 
     /**
