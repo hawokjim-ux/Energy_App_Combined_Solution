@@ -147,6 +147,19 @@ serve(async (req) => {
         if (receiptMatch) {
           mpesaReceiptNumber = receiptMatch[1];
         }
+
+        // If no receipt from regex, try to get it from DB (callback may have saved it)
+        if (!mpesaReceiptNumber) {
+          const { data: updatedTx } = await supabase
+            .from("mpesa_transactions")
+            .select("mpesa_receipt")
+            .eq("checkout_request_id", checkoutRequestId)
+            .single();
+          if (updatedTx?.mpesa_receipt) {
+            mpesaReceiptNumber = updatedTx.mpesa_receipt;
+            console.log(`📥 Retrieved receipt from DB: ${mpesaReceiptNumber}`);
+          }
+        }
       } else if (resultCode === 1032) {
         status = "cancelled";
       } else if (resultCode !== null) {
