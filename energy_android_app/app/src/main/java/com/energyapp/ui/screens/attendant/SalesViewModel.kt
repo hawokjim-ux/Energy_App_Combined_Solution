@@ -103,7 +103,12 @@ data class SalesUiState(
     // Background/Pending Transactions Queue
     val pendingTransactions: List<PendingTransaction> = emptyList(),
     val showPendingDialog: Boolean = false,
-    val selectedPendingTransaction: PendingTransaction? = null
+    val selectedPendingTransaction: PendingTransaction? = null,
+    // C2B Transaction Linking
+    val c2bTransactions: List<com.energyapp.data.remote.C2BTransactionResponse> = emptyList(),
+    val selectedC2BTransaction: com.energyapp.data.remote.C2BTransactionResponse? = null,
+    val isLoadingC2B: Boolean = false,
+    val c2bError: String? = null
 )
 
 /**
@@ -137,6 +142,7 @@ class SalesViewModel @Inject constructor(
     init {
         loadData()
         startBackgroundPolling()
+        loadC2BTransactions() // Load unlinked M-Pesa payments
     }
 
     fun setUserId(id: Int) {
@@ -1192,5 +1198,150 @@ class SalesViewModel @Inject constructor(
         return _uiState.value.pendingTransactions.count { 
             it.status == PendingStatus.WAITING_FOR_PIN || it.status == PendingStatus.PROCESSING 
         }
+    }
+
+    // ==================== C2B TRANSACTION LINKING ====================
+    
+    /**
+     * Load unlinked C2B transactions (M-Pesa payments waiting to be linked)
+     */
+    fun loadC2BTransactions() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingC2B = true, c2bError = null)
+            
+            try {
+                val stationId = if (_uiState.value.hasStationAssignment) {
+                    _uiState.value.assignedStationId
+                } else null
+                
+                val result = supabaseApiService.getUnlinkedC2BTransactions(stationId)
+                
+                if (result.isSuccess) {
+                    val transactions = result.getOrThrow()
+                    Log.d(TAG, "📥 Loaded ${transactions.size} unlinked C2B transactions")
+                    _uiState.value = _uiState.value.copy(
+                        c2bTransactions = transactions,
+                        isLoadingC2B = false
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingC2B = false,
+                        c2bError = "Failed to load payments: ${result.exceptionOrNull()?.message}"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error loading C2B transactions: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    isLoadingC2B = false,
+                    c2bError = "Error: ${e.message}"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Select a C2B transaction to link
+     */
+    fun selectC2BTransaction(transaction: com.energyapp.data.remote.C2BTransactionResponse?) {
+        _uiState.value = _uiState.value.copy(selectedC2BTransaction = transaction)
+        
+        // Auto-populate amount from selected transaction
+        if (transaction != null) {
+            _uiState.value = _uiState.value.copy(amount = transaction.amount.toString())
+            calculateLiters(transaction.amount.toString())
+        }
+    }
+    
+    /**
+     * Link selected C2B payment to a sale (C2B flow)
+     */
+    fun linkC2BPayment() {
+        val c2bTransaction = _uiState.value.selectedC2BTransaction
+        if (c2bTransaction == null) {
+            _uiState.value = _uiState.value.copy(validationError = "Please select an M-Pesa payment to link")
+            return
+        }
+        
+        val pump = _uiState.value.selectedPump
+        if (pump == null) {
+            _uiState.value = _uiState.value.copy(validationError = "Please select a pump")
+            return
+        }
+        
+        if (pump.currentShiftId == null) {
+            _uiState.value = _uiState.value.copy(validationError = "No active shift for selected pump")
+            return
+        }
+        
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isProcessing = true, error = null)
+            
+            try {
+                val shiftId = pump.currentShiftId
+                val saleIdNo = _uiState.value.receiptNumber
+                val currentTime = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(java.util.Date())
+                
+                // Create sale request with C2B transaction details
+                val saleRequest = com.energyapp.data.remote.models.CreateSaleRequest(
+                    saleIdNo = saleIdNo,
+                    pumpShiftId = shiftId,
+                    pumpId = pump.pumpId,
+                    attendantId = userId,
+                    amount = c2bTransaction.amount,
+                    customerMobileNo = c2bTransaction.phone ?: "C2B",
+                    transactionStatus = "M-PESA",
+                    stationId = _uiState.value.assignedStationId,
+                    fuelTypeId = pump.fuelTypeId,
+                    litersSold = _uiState.value.litersSold,
+                    pricePerLiter = _uiState.value.pricePerLiter,
+                    totalAmount = c2bTransaction.amount,
+                    paymentMethod = "mpesa",
+                    saleTime = currentTime,
+                    mpesaReceiptNumber = c2bTransaction.mpesaReceipt
+                )
+                
+                val result = supabaseApiService.createSaleWithC2BPayment(
+                    request = saleRequest,
+                    c2bTransaction = c2bTransaction,
+                    linkedBy = userId
+                )
+                
+                if (result.isSuccess) {
+                    val sale = result.getOrThrow()
+                    Log.d(TAG, "✅ C2B payment linked successfully: ${sale.saleIdNo}")
+                    
+                    _uiState.value = _uiState.value.copy(
+                        isProcessing = false,
+                        successMessage = "✅ Payment Linked Successfully!\nReceipt: $saleIdNo\nM-Pesa: ${c2bTransaction.mpesaReceipt}\nAmount: ${c2bTransaction.displayAmount}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L",
+                        mpesaReceipt = c2bTransaction.mpesaReceipt,
+                        salesCount = _uiState.value.salesCount + 1,
+                        selectedC2BTransaction = null
+                    )
+                    
+                    // Remove the linked transaction from the list
+                    val updatedTransactions = _uiState.value.c2bTransactions.filter { 
+                        it.id != c2bTransaction.id 
+                    }
+                    _uiState.value = _uiState.value.copy(c2bTransactions = updatedTransactions)
+                    
+                } else {
+                    throw Exception(result.exceptionOrNull()?.message ?: "Failed to link payment")
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error linking C2B payment: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    error = "Failed to link payment: ${e.message}"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Refresh C2B transactions
+     */
+    fun refreshC2BTransactions() {
+        loadC2BTransactions()
     }
 }

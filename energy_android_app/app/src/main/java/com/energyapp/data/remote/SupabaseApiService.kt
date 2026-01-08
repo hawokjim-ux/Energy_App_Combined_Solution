@@ -190,6 +190,28 @@ interface SupabaseApi {
         @Query("license_id") licenseId: String,
         @Body updateData: Map<String, @JvmSuppressWildcards Any?>
     ): List<LicenseDbResponse>
+
+    // ==================== C2B Transactions (Payment Linking) ====================
+    @GET("c2b_transactions")
+    suspend fun getUnlinkedC2BTransactions(
+        @Query("is_linked") isLinked: String = "eq.false",
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 50
+    ): List<C2BTransactionResponse>
+
+    @GET("c2b_transactions")
+    suspend fun getUnlinkedC2BTransactionsByStation(
+        @Query("station_id") stationId: String,
+        @Query("is_linked") isLinked: String = "eq.false",
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 50
+    ): List<C2BTransactionResponse>
+
+    @PATCH("c2b_transactions")
+    suspend fun linkC2BTransaction(
+        @Query("id") transactionId: String,
+        @Body updateData: Map<String, @JvmSuppressWildcards Any?>
+    ): List<C2BTransactionResponse>
 }
 
 // ==================== Data Models ====================
@@ -251,7 +273,32 @@ data class LicenseDbResponse(
     @SerializedName("device_model") val deviceModel: String?
 )
 
-// ==================== Main Service ====================
+// C2B Transaction Response Model (for payment linking)
+data class C2BTransactionResponse(
+    val id: Int,
+    @SerializedName("mpesa_receipt") val mpesaReceipt: String,
+    val phone: String?,
+    val amount: Double,
+    @SerializedName("transaction_time") val transactionTime: String?,
+    @SerializedName("account_reference") val accountReference: String?,
+    @SerializedName("customer_name") val customerName: String?,
+    @SerializedName("is_linked") val isLinked: Boolean,
+    @SerializedName("linked_sale_id") val linkedSaleId: Int?,
+    @SerializedName("linked_at") val linkedAt: String?,
+    @SerializedName("linked_by") val linkedBy: Int?,
+    @SerializedName("station_id") val stationId: Int?,
+    @SerializedName("created_at") val createdAt: String?
+) {
+    // Formatted phone number for display (mask middle digits)
+    val displayPhone: String
+        get() = phone?.let {
+            if (it.length >= 10) "${it.take(5)}***${it.takeLast(2)}" else it
+        } ?: "Unknown"
+    
+    // Formatted amount
+    val displayAmount: String
+        get() = "KES ${String.format("%,.0f", amount)}"
+}
 @Singleton
 class SupabaseApiService @Inject constructor(
     private val mpesaBackendService: MpesaBackendService
@@ -1418,6 +1465,98 @@ class SupabaseApiService @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error revoking license: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // ==================== C2B Transaction Methods (Payment Linking) ====================
+    
+    /**
+     * Get all unlinked C2B transactions (payments waiting to be linked to sales)
+     */
+    suspend fun getUnlinkedC2BTransactions(stationId: Int? = null): Result<List<C2BTransactionResponse>> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "📥 Fetching unlinked C2B transactions${if (stationId != null) " for station $stationId" else ""}...")
+            val transactions = if (stationId != null) {
+                api.getUnlinkedC2BTransactionsByStation("eq.$stationId")
+            } else {
+                api.getUnlinkedC2BTransactions()
+            }
+            Log.d(TAG, "✅ Retrieved ${transactions.size} unlinked C2B transactions")
+            Result.success(transactions)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error fetching C2B transactions: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Link a C2B transaction to a sale
+     */
+    suspend fun linkC2BTransactionToSale(
+        transactionId: Int,
+        saleId: Int,
+        linkedBy: Int
+    ): Result<C2BTransactionResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "🔗 Linking C2B transaction $transactionId to sale $saleId...")
+            val updateData = mapOf<String, Any?>(
+                "is_linked" to true,
+                "linked_sale_id" to saleId,
+                "linked_at" to java.time.Instant.now().toString(),
+                "linked_by" to linkedBy
+            )
+            val result = api.linkC2BTransaction("eq.$transactionId", updateData)
+            if (result.isNotEmpty()) {
+                Log.d(TAG, "✅ C2B transaction linked successfully")
+                Result.success(result.first())
+            } else {
+                Result.failure(Exception("Failed to link C2B transaction"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error linking C2B transaction: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Create a sale and link it to a C2B transaction in one operation
+     */
+    suspend fun createSaleWithC2BPayment(
+        request: CreateSaleRequest,
+        c2bTransaction: C2BTransactionResponse,
+        linkedBy: Int
+    ): Result<SaleResponse> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "💳 Creating sale with C2B payment: ${c2bTransaction.mpesaReceipt}")
+            
+            // Create the sale with M-Pesa receipt
+            val saleRequest = request.copy(
+                transactionStatus = "M-PESA",
+                mpesaReceiptNumber = c2bTransaction.mpesaReceipt,
+                totalAmount = c2bTransaction.amount,
+                amount = c2bTransaction.amount,
+                customerMobileNo = c2bTransaction.phone ?: "C2B",
+                paymentMethod = "mpesa"
+            )
+            
+            val saleResult = createSale(saleRequest)
+            if (saleResult.isFailure) {
+                return@withContext Result.failure(saleResult.exceptionOrNull() ?: Exception("Failed to create sale"))
+            }
+            
+            val sale = saleResult.getOrThrow()
+            
+            // Link the C2B transaction to the sale
+            val linkResult = linkC2BTransactionToSale(c2bTransaction.id, sale.saleId, linkedBy)
+            if (linkResult.isFailure) {
+                Log.w(TAG, "⚠️ Sale created but failed to link C2B transaction")
+            }
+            
+            Log.d(TAG, "✅ Sale created and C2B transaction linked: ${sale.saleIdNo}")
+            Result.success(sale)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error creating sale with C2B payment: ${e.message}")
             Result.failure(e)
         }
     }

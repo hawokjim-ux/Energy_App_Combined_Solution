@@ -115,41 +115,73 @@ fun SalesScreen(
                         enabled = !uiState.isProcessing
                     )
 
-                    // Payment Method
-                    PaymentMethodSection(
-                        selectedMethod = uiState.paymentMethod,
-                        onMethodSelect = viewModel::setPaymentMethod,
-                        enabled = !uiState.isProcessing
+                    // C2B Transaction Grid (Link M-Pesa Payments)
+                    C2BTransactionGrid(
+                        transactions = uiState.c2bTransactions,
+                        selectedTransaction = uiState.selectedC2BTransaction,
+                        isLoading = uiState.isLoadingC2B,
+                        error = uiState.c2bError,
+                        onTransactionSelect = viewModel::selectC2BTransaction,
+                        onRefresh = viewModel::refreshC2BTransactions,
+                        onLinkPayment = viewModel::linkC2BPayment,
+                        isProcessing = uiState.isProcessing
                     )
-
-                    // Phone Number (M-Pesa only)
-                    if (uiState.paymentMethod == PaymentMethod.MPESA) {
-                        PhoneInputCard(
-                            mobile = uiState.customerMobile,
-                            onMobileChange = viewModel::onCustomerMobileChange,
-                            enabled = !uiState.isProcessing
-                        )
-                    }
 
                     // Validation Error
                     uiState.validationError?.let { error ->
                         ErrorBanner(error)
                     }
 
-                    // Main Payment Button
-                    PaymentActionButton(
-                        isProcessing = uiState.isProcessing,
-                        isEnabled = !uiState.isProcessing && uiState.pumps.isNotEmpty(),
-                        paymentMethod = uiState.paymentMethod,
-                        pollingAttempt = uiState.pollingAttempt,
-                        maxAttempts = uiState.maxPollingAttempts,
-                        onClick = viewModel::processPayment
-                    )
+                    // Cash Payment Button (alternative to C2B linking)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                "💵 Cash Payment",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF334155)
+                            )
+                            Button(
+                                onClick = {
+                                    viewModel.setPaymentMethod(PaymentMethod.CASH)
+                                    viewModel.processPayment()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                enabled = !uiState.isProcessing && uiState.pumps.isNotEmpty() && uiState.amount.isNotEmpty(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFF59E0B),
+                                    disabledContainerColor = Color(0xFFD1D5DB)
+                                )
+                            ) {
+                                Text("💵", fontSize = 18.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "Process Cash Sale",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
 
                     // Quick Actions
                     QuickActionsBar(
                         onClear = viewModel::clearForm,
-                        onRefresh = viewModel::refresh
+                        onRefresh = {
+                            viewModel.refresh()
+                            viewModel.refreshC2BTransactions()
+                        }
                     )
                 // Extra space for keyboard
                 Spacer(modifier = Modifier.height(100.dp))
@@ -1462,6 +1494,311 @@ fun PendingTransactionItem(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ==================== C2B TRANSACTION GRID (PAYMENT LINKING) ====================
+
+@Composable
+fun C2BTransactionGrid(
+    transactions: List<com.energyapp.data.remote.C2BTransactionResponse>,
+    selectedTransaction: com.energyapp.data.remote.C2BTransactionResponse?,
+    isLoading: Boolean,
+    error: String?,
+    onTransactionSelect: (com.energyapp.data.remote.C2BTransactionResponse?) -> Unit,
+    onRefresh: () -> Unit,
+    onLinkPayment: () -> Unit,
+    isProcessing: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header with refresh button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                color = Color(0xFF10B981).copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("📱", fontSize = 18.sp)
+                    }
+                    Column {
+                        Text(
+                            "M-Pesa Payments",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                        Text(
+                            "${transactions.size} unlinked payment${if (transactions.size != 1) "s" else ""}",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+                
+                // Refresh button
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF1F5F9))
+                        .clickable { onRefresh() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFF0EA5E9)
+                        )
+                    } else {
+                        Icon(
+                            Icons.Rounded.Refresh,
+                            contentDescription = "Refresh",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            
+            // Error message
+            if (error != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = Color(0xFFFEE2E2),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(10.dp)
+                ) {
+                    Text(
+                        error,
+                        color = Color(0xFFDC2626),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+            
+            // Transaction List
+            if (transactions.isEmpty() && !isLoading) {
+                // Empty state
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .background(
+                            color = Color(0xFFF8FAFC),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("💳", fontSize = 28.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "No unlinked payments",
+                            fontSize = 14.sp,
+                            color = Color(0xFF64748B)
+                        )
+                        Text(
+                            "Waiting for M-Pesa confirmations...",
+                            fontSize = 12.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+            } else {
+                // Transaction cards
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    transactions.take(5).forEach { transaction ->
+                        C2BTransactionCard(
+                            transaction = transaction,
+                            isSelected = selectedTransaction?.id == transaction.id,
+                            onClick = {
+                                onTransactionSelect(
+                                    if (selectedTransaction?.id == transaction.id) null else transaction
+                                )
+                            }
+                        )
+                    }
+                    
+                    // Show more indicator
+                    if (transactions.size > 5) {
+                        Text(
+                            "... and ${transactions.size - 5} more",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            fontSize = 12.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+            }
+            
+            // Link Payment Button
+            if (selectedTransaction != null) {
+                Button(
+                    onClick = onLinkPayment,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    enabled = !isProcessing,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF10B981),
+                        disabledContainerColor = Color(0xFF94A3B8)
+                    )
+                ) {
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Linking...", fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("✅", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Link Payment (${selectedTransaction.displayAmount})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun C2BTransactionCard(
+    transaction: com.energyapp.data.remote.C2BTransactionResponse,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color(0xFFD1FAE5) else Color(0xFFF8FAFC)
+        ),
+        border = if (isSelected) {
+            androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF10B981))
+        } else {
+            androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left side: Radio button + details
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Selection indicator
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(
+                            color = if (isSelected) Color(0xFF10B981) else Color.White,
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = if (isSelected) 0.dp else 2.dp,
+                            color = if (isSelected) Color.Transparent else Color(0xFFCBD5E1),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            Icons.Rounded.Check,
+                            contentDescription = "Selected",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+                
+                Column {
+                    // Receipt number
+                    Text(
+                        transaction.mpesaReceipt,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color(0xFF047857) else Color(0xFF334155)
+                    )
+                    // Phone and customer name
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            transaction.displayPhone,
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                        if (!transaction.customerName.isNullOrBlank()) {
+                            Text("•", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                            Text(
+                                transaction.customerName,
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Right side: Amount
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    transaction.displayAmount,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) Color(0xFF047857) else Color(0xFF10B981)
+                )
+                Text(
+                    "Just now",
+                    fontSize = 10.sp,
+                    color = Color(0xFF94A3B8)
+                )
             }
         }
     }
