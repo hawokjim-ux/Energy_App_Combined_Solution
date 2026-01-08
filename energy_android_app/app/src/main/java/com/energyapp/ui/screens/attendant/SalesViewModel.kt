@@ -612,10 +612,26 @@ class SalesViewModel @Inject constructor(
                                 Log.d(TAG, "✅ PAYMENT SUCCESSFUL!")
                                 Log.d(TAG, "💳 Receipt: ${statusResult.mpesaReceiptNumber}")
 
+                                // If receipt is null/empty, wait briefly and retry once
+                                var receipt = statusResult.mpesaReceiptNumber
+                                if (receipt.isNullOrEmpty()) {
+                                    Log.d(TAG, "⏳ Receipt not available, waiting for callback...")
+                                    delay(2000) // Wait for callback to process
+                                    try {
+                                        val retryResult = mpesaBackendService.checkTransactionStatus(checkoutRequestID)
+                                        if (!retryResult.mpesaReceiptNumber.isNullOrEmpty()) {
+                                            receipt = retryResult.mpesaReceiptNumber
+                                            Log.d(TAG, "✅ Got receipt on retry: $receipt")
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "⚠️ Retry for receipt failed: ${e.message}")
+                                    }
+                                }
+
                                 saleId?.toIntOrNull()?.let { id ->
                                     try {
                                         supabaseApiService.updateSaleTransactionStatus(
-                                            id, "SUCCESS", statusResult.mpesaReceiptNumber
+                                            id, "SUCCESS", receipt
                                         )
                                     } catch (e: Exception) {
                                         Log.w(TAG, "⚠️ Sale update failed: ${e.message}")
@@ -624,10 +640,11 @@ class SalesViewModel @Inject constructor(
 
                                 val amount = _uiState.value.amount.toDoubleOrNull() ?: 0.0
                                 val elapsedSeconds = (System.currentTimeMillis() - paymentStartTime) / 1000.0
+                                val receiptDisplay = receipt ?: "Processing..."
                                 _uiState.value = _uiState.value.copy(
                                     isProcessing = false,
-                                    successMessage = "✅ M-Pesa Payment Successful!\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L\nReceipt: ${statusResult.mpesaReceiptNumber}\n⚡ Completed in ${String.format("%.1f", elapsedSeconds)} seconds",
-                                    mpesaReceipt = statusResult.mpesaReceiptNumber,
+                                    successMessage = "✅ M-Pesa Payment Successful!\nAmount: KES ${String.format("%,.2f", amount)}\nLiters: ${String.format("%.2f", _uiState.value.litersSold)} L\nReceipt: $receiptDisplay\n⚡ Completed in ${String.format("%.1f", elapsedSeconds)} seconds",
+                                    mpesaReceipt = receipt,
                                     error = null,
                                     salesCount = _uiState.value.salesCount + 1
                                 )
